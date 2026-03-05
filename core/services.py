@@ -24,15 +24,15 @@ def update_batch_statuses():
 
 
 @transaction.atomic
-def consume_grease_fifo(grease_type, quantity_to_consume, user, reference="", reason=""):
+def consume_grease(grease_type, quantity_to_consume, user, reference="", reason=""):
     """
-    Consume grasa aplicando lógica FIFO estricta.
+    Consume grasa aplicando lógica estricta de vencimiento.
     Retorna True si fue exitoso, lanza ValidationError si no hay stock o hay errores.
     """
     if quantity_to_consume <= 0:
         raise ValidationError("La cantidad a consumir debe ser mayor a cero.")
 
-    # Lotes disponibles: status SERVICEABLE o NEAR_EXPIRATION, ordenados por fecha de vencimiento más próxima (FIFO)
+    # Lotes disponibles: status SERVICEABLE o NEAR_EXPIRATION, ordenados por fecha de vencimiento más próxima
     available_batches = GreaseBatch.objects.filter(
         grease_type=grease_type,
         status__in=['SERVICEABLE', 'NEAR_EXPIRATION'],

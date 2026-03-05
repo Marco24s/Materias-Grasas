@@ -16,6 +16,39 @@
 </div>
 
 {% if user.is_authenticated %}
+
+{% if stock_alerts %}
+<div class="row mt-2 mb-4">
+    <div class="col-12">
+        <div class="card border-warning shadow-sm">
+            <div class="card-header bg-warning text-dark fw-bold">
+                <i class="fa-solid fa-cart-arrow-down me-2"></i> Alerta de Abastecimiento (Stock Insuficiente para Planes de Empleo)
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for alert in stock_alerts %}
+                    <div class="list-group-item list-group-item-warning d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ alert.grease_type.nomenclatura }}</strong>
+                            <br>
+                            <small>Proyectado: {{ alert.projected|smart_number }} {{ alert.grease_type.unidad }} | Disponible: {{ alert.available|smart_number }} {{ alert.grease_type.unidad }}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-danger rounded-pill fs-6 mb-1">
+                                Faltante: {{ alert.shortfall|smart_number }} {{ alert.grease_type.unidad }}
+                            </span>
+                            <br>
+                            <a href="{% url 'procurement_forecast' %}" class="btn btn-sm btn-outline-danger">Adquirir</a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% if alerts %}
 <div class="row mt-2 mb-4">
     <div class="col-12">
@@ -83,7 +116,7 @@
         <div class="card shadow-sm h-100 border-start border-warning border-4">
             <div class="card-body">
                 <h5 class="card-title text-warning"><i class="fa-solid fa-boxes-stacked me-2"></i> Logística</h5>
-                <p class="card-text text-muted">Control de Stock, Consumos FIFO y Abastecimiento.</p>
+                <p class="card-text text-muted">Control de Stock, Consumos y Abastecimiento.</p>
                 <div class="d-grid gap-2">
                     <a href="{% url 'batch_list' %}" class="btn btn-outline-warning btn-sm">Gestionar Stock</a>
                     <a href="{% url 'procurement_forecast' %}" class="btn btn-outline-info btn-sm">Análisis de Abastecimiento</a>

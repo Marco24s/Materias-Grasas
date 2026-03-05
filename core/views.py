@@ -12,9 +12,10 @@ from django.core.exceptions import ValidationError
 import csv
 from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
-from .models import Unit, AircraftModel, GreaseType, AircraftGrease, FlightPlan, GreaseBatch, StockMovement
-from .forms import UnitForm, AircraftModelForm, GreaseTypeForm, AircraftGreaseForm, FlightPlanForm, GreaseBatchForm, ConsumeGreaseForm
-from .services import update_batch_statuses, consume_grease_fifo
+from .models import Unit, MeasurementUnit, AircraftModel, GreaseType, AircraftGrease, FlightPlan, GreaseBatch, StockMovement, GreaseReferencePrice
+from .forms import UnitForm, MeasurementUnitForm, AircraftModelForm, GreaseTypeForm, AircraftGreaseForm, FlightPlanForm, GreaseBatchForm, ConsumeGreaseForm, GreaseReferencePriceForm
+from .services import update_batch_statuses, consume_grease
+from django.db.models import ProtectedError
 
 class LogisticsRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
     def test_func(self):
@@ -27,14 +28,40 @@ class LogisticsRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
 
 # Home View
 def home(request):
-    alerts = []
+    expiration_alerts = []
+    stock_alerts = []
+    
     if request.user.is_authenticated:
         update_batch_statuses()
-        alerts = GreaseBatch.objects.filter(
+        
+        # Alertas de Vencimiento
+        expiration_alerts = GreaseBatch.objects.filter(
             status__in=['NEAR_EXPIRATION', 'EXPIRED'],
             available_quantity__gt=0
         ).order_by('expiration_date')
-    return render(request, 'core/home.html', {'alerts': alerts})
+        
+        # Alertas de Stock Mínimo (Previsión de Abastecimiento)
+        grease_types = GreaseType.objects.all()
+        for gt in grease_types:
+            total_available = sum(b.available_quantity for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION']))
+            total_projected = 0
+            
+            for assoc in gt.aircraft_associations.all():
+                for plan in assoc.aircraft_model.flight_plans.all():
+                    total_projected += (assoc.hourly_consumption_rate * plan.planned_hours)
+                    
+            if total_projected > total_available:
+                stock_alerts.append({
+                    'grease_type': gt,
+                    'shortfall': total_projected - total_available,
+                    'available': total_available,
+                    'projected': total_projected
+                })
+
+    return render(request, 'core/home.html', {
+        'alerts': expiration_alerts,
+        'stock_alerts': stock_alerts
+    })
 
 # --- Units ---
 class UnitListView(LoginRequiredMixin, ListView):
@@ -57,6 +84,46 @@ class UnitUpdateView(LogisticsRequiredMixin, SuccessMessageMixin, UpdateView):
     success_url = reverse_lazy('unit_list')
     success_message = "Unidad actualizada exitosamente."
     extra_context = {'title': 'Editar Unidad'}
+
+class UnitDeleteView(LogisticsRequiredMixin, SuccessMessageMixin, DeleteView):
+    model = Unit
+    template_name = 'core/unit_confirm_delete.html'
+    success_url = reverse_lazy('unit_list')
+    success_message = "Unidad eliminada exitosamente."
+
+    def form_valid(self, form):
+        messages.success(self.request, self.success_message)
+        return super().form_valid(form)
+
+# --- Measurement Units (Configuration) ---
+class MeasurementUnitListView(LogisticsRequiredMixin, ListView):
+    model = MeasurementUnit
+    template_name = 'core/measurementunit_list.html'
+    context_object_name = 'units'
+
+class MeasurementUnitCreateView(LogisticsRequiredMixin, SuccessMessageMixin, CreateView):
+    model = MeasurementUnit
+    form_class = MeasurementUnitForm
+    template_name = 'core/measurementunit_form.html'
+    success_url = reverse_lazy('measurementunit_list')
+    success_message = "Unidad de medida creada exitosamente."
+
+class MeasurementUnitUpdateView(LogisticsRequiredMixin, SuccessMessageMixin, UpdateView):
+    model = MeasurementUnit
+    form_class = MeasurementUnitForm
+    template_name = 'core/measurementunit_form.html'
+    success_url = reverse_lazy('measurementunit_list')
+    success_message = "Unidad de medida actualizada exitosamente."
+
+class MeasurementUnitDeleteView(LogisticsRequiredMixin, SuccessMessageMixin, DeleteView):
+    model = MeasurementUnit
+    template_name = 'core/measurementunit_confirm_delete.html'
+    success_url = reverse_lazy('measurementunit_list')
+    success_message = "Unidad de medida eliminada exitosamente."
+
+    def form_valid(self, form):
+        messages.success(self.request, self.success_message)
+        return super().form_valid(form)
 
 # --- Aircraft Models ---
 class AircraftListView(LoginRequiredMixin, ListView):
@@ -102,6 +169,53 @@ class GreaseTypeUpdateView(LogisticsRequiredMixin, SuccessMessageMixin, UpdateVi
     success_message = "Tipo de Grasa actualizado exitosamente."
     extra_context = {'title': 'Editar Tipo de Grasa'}
 
+# --- Grease Reference Prices ---
+class GreaseReferencePriceListView(LoginRequiredMixin, ListView):
+    model = GreaseReferencePrice
+    template_name = 'core/greasereferenceprice_list.html'
+    context_object_name = 'prices'
+
+    def get_queryset(self):
+        return GreaseReferencePrice.objects.filter(grease_type_id=self.kwargs['pk'])
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['grease_type'] = GreaseType.objects.get(pk=self.kwargs['pk'])
+        return context
+
+class GreaseReferencePriceCreateView(LogisticsRequiredMixin, SuccessMessageMixin, CreateView):
+    model = GreaseReferencePrice
+    form_class = GreaseReferencePriceForm
+    template_name = 'core/form_base.html'
+    success_message = "Cotización / Precio de Referencia agregado exitosamente."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        gt = GreaseType.objects.get(pk=self.kwargs['pk'])
+        context['title'] = f'Agregar Precio de Referencia - {gt.nomenclatura}'
+        return context
+        
+    def get_initial(self):
+        initial = super().get_initial()
+        gt = GreaseType.objects.get(pk=self.kwargs['pk'])
+        initial['presentation_quantity'] = gt.presentacion
+        return initial
+
+    def form_valid(self, form):
+        form.instance.grease_type_id = self.kwargs['pk']
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy('grease_price_list', kwargs={'pk': self.kwargs['pk']})
+
+class GreaseReferencePriceDeleteView(LogisticsRequiredMixin, SuccessMessageMixin, DeleteView):
+    model = GreaseReferencePrice
+    template_name = 'core/confirm_delete.html'
+    success_message = "Precio de Referencia eliminado exitosamente."
+
+    def get_success_url(self):
+        return reverse_lazy('grease_price_list', kwargs={'pk': self.object.grease_type_id})
+
 # --- Aircraft - Grease Associations ---
 class AircraftGreaseListView(LoginRequiredMixin, ListView):
     model = AircraftGrease
@@ -142,22 +256,22 @@ class FlightPlanCreateView(LogisticsRequiredMixin, SuccessMessageMixin, CreateVi
     form_class = FlightPlanForm
     template_name = 'core/form_base.html'
     success_url = reverse_lazy('flightplan_list')
-    success_message = "Plan de vuelo creado exitosamente."
-    extra_context = {'title': 'Crear Plan de Vuelo'}
+    success_message = "Plan de empleo creado exitosamente."
+    extra_context = {'title': 'Crear Plan de Empleo'}
 
 class FlightPlanUpdateView(LogisticsRequiredMixin, SuccessMessageMixin, UpdateView):
     model = FlightPlan
     form_class = FlightPlanForm
     template_name = 'core/form_base.html'
     success_url = reverse_lazy('flightplan_list')
-    success_message = "Plan de vuelo actualizado exitosamente."
-    extra_context = {'title': 'Editar Plan de Vuelo'}
+    success_message = "Plan de empleo actualizado exitosamente."
+    extra_context = {'title': 'Editar Plan de Empleo'}
 
 class FlightPlanDeleteView(LogisticsRequiredMixin, SuccessMessageMixin, DeleteView):
     model = FlightPlan
     template_name = 'core/confirm_delete.html'
     success_url = reverse_lazy('flightplan_list')
-    success_message = "Plan de vuelo eliminado exitosamente."
+    success_message = "Plan de empleo eliminado exitosamente."
 
 # --- Stock Management & Batches ---
 class GreaseBatchListView(LoginRequiredMixin, ListView):
@@ -212,7 +326,7 @@ class ConsumeGreaseView(LogisticsRequiredMixin, FormView):
     template_name = 'core/form_base.html'
     form_class = ConsumeGreaseForm
     success_url = reverse_lazy('batch_list')
-    extra_context = {'title': 'Registrar Consumo de Grasa (FIFO)'}
+    extra_context = {'title': 'Registrar Consumo de Grasa'}
 
     def form_valid(self, form):
         grease_type = form.cleaned_data['grease_type']
@@ -222,7 +336,7 @@ class ConsumeGreaseView(LogisticsRequiredMixin, FormView):
         
         try:
             update_batch_statuses() # Always good to ensure accurate expiration states before consuming
-            consume_grease_fifo(
+            consume_grease(
                 grease_type=grease_type,
                 quantity_to_consume=quantity,
                 user=self.request.user,
@@ -234,6 +348,22 @@ class ConsumeGreaseView(LogisticsRequiredMixin, FormView):
         except ValidationError as e:
             form.add_error(None, e.message)
             return self.form_invalid(form)
+
+class GreaseBatchDeleteView(LogisticsRequiredMixin, DeleteView):
+    model = GreaseBatch
+    template_name = 'core/confirm_delete.html'
+    success_url = reverse_lazy('batch_list')
+    
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        
+        # Eliminar los movimientos asociados usando filter().delete()
+        # Esto hace un "bulk delete" a nivel de base de datos y esquiva la validación
+        # personalizada del modelo StockMovement que impide el borrado normal.
+        StockMovement.objects.filter(batch=self.object).delete()
+        
+        messages.success(request, f"El lote {self.object.batch_number} fue eliminado exitosamente.")
+        return super().post(request, *args, **kwargs)
 
 # --- Procurement Forecasting ---
 class ProcurementForecastingView(LoginRequiredMixin, TemplateView):
@@ -250,10 +380,18 @@ class ProcurementForecastingView(LoginRequiredMixin, TemplateView):
             total_available = sum(b.available_quantity for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION']))
             
             total_projected = 0
+            plan_details = []
             for assoc in gt.aircraft_associations.all():
                 for plan in assoc.aircraft_model.flight_plans.all():
                     # Para el MVP, suma todos los planes. En prod se filtraría por >= today o por periodo específico
-                    total_projected += (assoc.hourly_consumption_rate * plan.planned_hours)
+                    projected_for_plan = assoc.hourly_consumption_rate * plan.planned_hours
+                    total_projected += projected_for_plan
+                    plan_details.append({
+                        'aircraft': assoc.aircraft_model,
+                        'plan': plan,
+                        'rate': assoc.hourly_consumption_rate,
+                        'projected': projected_for_plan
+                    })
                     
             shortfall = total_projected - total_available
             recommended_purchase = shortfall if shortfall > 0 else 0
@@ -263,7 +401,8 @@ class ProcurementForecastingView(LoginRequiredMixin, TemplateView):
                 'total_available': total_available,
                 'total_projected': total_projected,
                 'shortfall': shortfall,
-                'recommended_purchase': recommended_purchase
+                'recommended_purchase': recommended_purchase,
+                'plan_details': plan_details
             })
             
         context['forecast_data'] = forecast_data

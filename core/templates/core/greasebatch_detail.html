@@ -26,6 +26,12 @@
                 <strong>{{ batch.available_quantity|smart_number }} / {{ batch.initial_quantity|smart_number }}</strong>
                 <small class="text-muted fs-6">{{ batch.grease_type.unidad }}</small>
                 </p>
+                {% if batch.unit_price %}
+                <h4 class="mt-4 text-success">Costo Unitario / Valor Total</h4>
+                <p class="display-6 text-success">
+                <strong>${{ batch.unit_price|floatformat:2 }} / ${{ batch.get_total_value|floatformat:2 }}</strong>
+                </p>
+                {% endif %}
             </div>
         </div>
     </div>

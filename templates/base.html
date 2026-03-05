@@ -46,7 +46,7 @@
                         <a class="nav-link" href="{% url 'association_list' %}">Consumos Asignados</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'flightplan_list' %}">Planes de Vuelo</a>
+                        <a class="nav-link" href="{% url 'flightplan_list' %}">Planes de Empleo</a>
                     </li>
                     <li class="nav-item fw-bold border-start border-1 border-secondary ps-2 ms-1">
                         <a class="nav-link text-warning" href="{% url 'batch_list' %}"><i class="fa-solid fa-boxes-stacked me-1"></i> Stock / Lotes</a>
@@ -58,6 +58,18 @@
                 </ul>
                 <ul class="navbar-nav ms-auto">
                     {% if user.is_authenticated %}
+                        {% if user.is_staff or 'Administrador' in user.groups.all|join:',' or 'Logistica' in user.groups.all|join:',' %}
+                        <li class="nav-item dropdown me-2">
+                            <a class="nav-link dropdown-toggle text-secondary" href="#" id="configDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Configuración del Sistema">
+                                <i class="fa-solid fa-gear fs-5"></i>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="configDropdown">
+                                <li><h6 class="dropdown-header">Diccionarios del Sistema</h6></li>
+                                <li><a class="dropdown-item" href="{% url 'measurementunit_list' %}"><i class="fa-solid fa-scale-balanced me-2"></i>Unidades de Medida</a></li>
+                                <!-- More config entries can go here in the future -->
+                            </ul>
+                        </li>
+                        {% endif %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="fa-solid fa-user me-1"></i> {{ user.username }}
@@ -106,7 +118,118 @@
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Custom script (optional) -->
-    <script src="{% static 'js/main.js' %}"></script>
+    <!-- Script para búsqueda global y ordenamiento en tablas -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tables = document.querySelectorAll('table.table');
+            tables.forEach((table, tableIndex) => {
+                const thead = table.querySelector('thead');
+                const tbody = table.querySelector('tbody');
+                if (!thead || !tbody) return;
+
+                // 1. Agregar buscador global arriba de la tabla
+                const searchContainer = document.createElement('div');
+                searchContainer.className = 'mb-2 d-flex justify-content-end';
+                searchContainer.innerHTML = `
+                    <div class="input-group input-group-sm" style="max-width: 300px;">
+                        <span class="input-group-text bg-white"><i class="fa-solid fa-search"></i></span>
+                        <input type="text" class="form-control border-start-0 ps-0" placeholder="Buscar en la tabla..." id="globalSearch${tableIndex}">
+                    </div>
+                `;
+                table.parentNode.insertBefore(searchContainer, table);
+
+                const searchInput = searchContainer.querySelector('input');
+                searchInput.addEventListener('input', function() {
+                    const filterValue = this.value.toLowerCase();
+                    const rows = tbody.querySelectorAll('tr');
+
+                    rows.forEach(row => {
+                        // Ignorar filas de estado vacío que usan colspan
+                        if (row.cells.length === 1 && row.cells[0].colSpan > 1) return;
+
+                        let showRow = false;
+                        for (let i = 0; i < row.cells.length; i++) {
+                            const cellText = row.cells[i].textContent.toLowerCase();
+                            if (cellText.includes(filterValue)) {
+                                showRow = true;
+                                break;
+                            }
+                        }
+                        row.style.display = showRow ? '' : 'none';
+                    });
+                });
+
+                // 2. Hacer columnas ordenables
+                const headers = thead.querySelectorAll('tr:first-child th');
+                headers.forEach((th, index) => {
+                    const headerText = th.textContent.trim().toLowerCase();
+                    
+                    // Excluir columnas de acciones
+                    if (headerText !== 'acciones' && headerText !== 'acción' && 
+                        headerText !== 'acción sugerida' && headerText !== 'auditoría' && 
+                        headerText !== '') {
+                        
+                        th.style.cursor = 'pointer';
+                        th.classList.add('position-relative', 'pe-4');
+                        
+                        // Agregar icono de ordenamiento por defecto
+                        const icon = document.createElement('i');
+                        icon.className = 'fa-solid fa-sort text-muted ms-1 position-absolute end-0 top-50 translate-middle-y pe-2';
+                        icon.style.opacity = '0.5';
+                        th.appendChild(icon);
+
+                        let sortOrder = 'asc';
+
+                        th.addEventListener('click', () => {
+                            // Resetear todos los iconos
+                            headers.forEach(h => {
+                                const i = h.querySelector('i.fa-sort, i.fa-sort-up, i.fa-sort-down');
+                                if (i) {
+                                    i.className = 'fa-solid fa-sort text-muted ms-1 position-absolute end-0 top-50 translate-middle-y pe-2';
+                                    i.style.opacity = '0.5';
+                                }
+                            });
+
+                            // Configurar icono actual
+                            icon.style.opacity = '1';
+                            if (sortOrder === 'asc') {
+                                icon.className = 'fa-solid fa-sort-up ms-1 position-absolute end-0 top-50 translate-middle-y pe-2 text-primary';
+                                sortOrder = 'desc';
+                            } else {
+                                icon.className = 'fa-solid fa-sort-down ms-1 position-absolute end-0 top-50 translate-middle-y pe-2 text-primary';
+                                sortOrder = 'asc';
+                            }
+
+                            // Ordenar filas
+                            const rows = Array.from(tbody.querySelectorAll('tr'));
+                            const emptyRow = rows.find(r => r.cells.length === 1 && r.cells[0].colSpan > 1);
+                            let rowsToSort = emptyRow ? rows.filter(r => r !== emptyRow) : rows;
+
+                            rowsToSort.sort((a, b) => {
+                                let valA = a.cells[index].textContent.trim();
+                                let valB = b.cells[index].textContent.trim();
+
+                                // Intentar orden numérico si es posible
+                                const numA = parseFloat(valA.replace(/[^0-9.-]+/g,""));
+                                const numB = parseFloat(valB.replace(/[^0-9.-]+/g,""));
+                                
+                                if (!isNaN(numA) && !isNaN(numB) && 
+                                    (valA.match(/^[0-9$.,\-\s]+[a-zA-Z\s]*$/) || valA.match(/^[a-zA-Z\s]*[0-9$.,\-\s]+$/))) {
+                                    return sortOrder === 'asc' ? numB - numA : numA - numB;
+                                }
+
+                                return sortOrder === 'asc' 
+                                    ? valB.localeCompare(valA) 
+                                    : valA.localeCompare(valB);
+                            });
+
+                            // Re-agregar filas ordenadas
+                            rowsToSort.forEach(row => tbody.appendChild(row));
+                        });
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>

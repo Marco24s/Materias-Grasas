@@ -21,6 +21,7 @@
                     <th>Presentación</th>
                     <th>Vida Útil (Meses)</th>
                     <th>Recertificable</th>
+                    <th>Costo Est. / Uds</th>
                     <th class="text-end">Acciones</th>
                 </tr>
             </thead>
@@ -41,15 +42,23 @@
                         <span class="badge bg-secondary">No</span>
                         {% endif %}
                     </td>
+                    <td>
+                        {% if grease.get_average_unit_price %}
+                        <span class="text-primary fw-bold">${{ grease.get_average_unit_price|floatformat:2 }}</span> / {{ grease.unidad }}
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
                     <td class="text-end">
                         {% if user.is_staff or 'Logistica' in user.groups.all|join:',' or 'Administrador' in user.groups.all|join:',' %}
+                        <a href="{% url 'grease_price_list' grease.id %}" class="btn btn-sm btn-outline-success" title="Precios de Referencia"><i class="fa-solid fa-dollar-sign"></i> Precios</a>
                         <a href="{% url 'grease_update' grease.id %}" class="btn btn-sm btn-outline-secondary">Editar</a>
                         {% endif %}
                     </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="9" class="text-center py-4 text-muted">No hay tipos de grasas registrados.</td>
+                    <td colspan="10" class="text-center py-4 text-muted">No hay tipos de grasas registrados.</td>
                 </tr>
                 {% endfor %}
             </tbody>

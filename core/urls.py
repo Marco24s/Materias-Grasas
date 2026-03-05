@@ -8,6 +8,13 @@ urlpatterns = [
     path('units/', views.UnitListView.as_view(), name='unit_list'),
     path('units/add/', views.UnitCreateView.as_view(), name='unit_create'),
     path('units/<int:pk>/edit/', views.UnitUpdateView.as_view(), name='unit_update'),
+    path('units/<int:pk>/delete/', views.UnitDeleteView.as_view(), name='unit_delete'),
+    
+    # Measurement Units (Configuration)
+    path('config/measurement-units/', views.MeasurementUnitListView.as_view(), name='measurementunit_list'),
+    path('config/measurement-units/add/', views.MeasurementUnitCreateView.as_view(), name='measurementunit_create'),
+    path('config/measurement-units/<int:pk>/edit/', views.MeasurementUnitUpdateView.as_view(), name='measurementunit_update'),
+    path('config/measurement-units/<int:pk>/delete/', views.MeasurementUnitDeleteView.as_view(), name='measurementunit_delete'),
     
     # Aircraft Models
     path('aircrafts/', views.AircraftListView.as_view(), name='aircraft_list'),
@@ -18,6 +25,9 @@ urlpatterns = [
     path('greases/', views.GreaseTypeListView.as_view(), name='grease_list'),
     path('greases/add/', views.GreaseTypeCreateView.as_view(), name='grease_create'),
     path('greases/<int:pk>/edit/', views.GreaseTypeUpdateView.as_view(), name='grease_update'),
+    path('greases/<int:pk>/prices/', views.GreaseReferencePriceListView.as_view(), name='grease_price_list'),
+    path('greases/<int:pk>/prices/add/', views.GreaseReferencePriceCreateView.as_view(), name='grease_price_create'),
+    path('greases/prices/<int:pk>/delete/', views.GreaseReferencePriceDeleteView.as_view(), name='grease_price_delete'),
     
     # Aircraft - Grease Associations
     path('associations/', views.AircraftGreaseListView.as_view(), name='association_list'),
@@ -35,6 +45,7 @@ urlpatterns = [
     path('stock/', views.GreaseBatchListView.as_view(), name='batch_list'),
     path('stock/add/', views.GreaseBatchCreateView.as_view(), name='batch_create'),
     path('stock/<int:pk>/movements/', views.GreaseBatchDetailView.as_view(), name='batch_detail'),
+    path('stock/<int:pk>/delete/', views.GreaseBatchDeleteView.as_view(), name='batch_delete'),
     path('stock/consume/', views.ConsumeGreaseView.as_view(), name='consume_grease'),
     
     # Procurement Forecasting

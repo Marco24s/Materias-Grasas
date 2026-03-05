@@ -20,8 +20,11 @@
             <div class="card-body">
                 <div class="row mb-3">
                     <div class="col-6">
-                        <small class="text-muted d-block">Fecha Inicio</small>
-                        <strong>{{ plan.period_start_date|date:"d M Y" }}</strong>
+                        <small class="text-muted d-block">Período de Validez</small>
+                        <strong>{{ plan.period_start_date|date:"d M y" }}</strong>
+                        {% if plan.period_end_date %}
+                        <small class="text-muted">al</small> <strong>{{ plan.period_end_date|date:"d M y" }}</strong>
+                        {% endif %}
                     </div>
                     <div class="col-6">
                         <small class="text-muted d-block">Horas Planificadas</small>
@@ -55,7 +58,7 @@
     <div class="col-12">
         <div class="alert alert-light text-center py-5 shadow-sm">
             <i class="fa-solid fa-calendar-xmark fa-3x text-muted mb-3"></i>
-            <h5 class="text-muted">No hay planes de vuelo registrados</h5>
+            <h5 class="text-muted">No hay planes de empleo registrados</h5>
             <p class="mb-0">Cree un nuevo plan para visualizar los consumos proyectados.</p>
         </div>
     </div>

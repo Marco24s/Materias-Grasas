@@ -20,3 +20,13 @@ def smart_number(value):
         return f_val
     except (ValueError, TypeError):
         return value
+
+@register.filter
+def abs_val(value):
+    """
+    Returns the absolute value of a number.
+    """
+    try:
+        return abs(value)
+    except TypeError:
+        return value

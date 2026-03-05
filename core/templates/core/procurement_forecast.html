@@ -3,8 +3,8 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
     <div>
-        <h2 class="mb-0"><i class="fa-solid fa-chart-line me-2"></i> Previsión de Consumo (Próximos 12 meses)</h2>
-        <p class="text-muted mb-0 mt-1">Proyección basada en los consumos horarios y planes de vuelo registrados.</p>
+        <h2 class="mb-0"><i class="fa-solid fa-chart-line me-2"></i> Previsión de Consumo</h2>
+        <p class="text-muted mb-0 mt-1">Proyección basada en los consumos horarios y planes de empleo registrados.</p>
     </div>
     <div>
         <a href="{% url 'export_procurement_forecast_csv' %}" class="btn btn-success me-2"><i class="fa-solid fa-file-csv me-2"></i>Descargar Excel (CSV)</a>
@@ -19,8 +19,8 @@
                 <tr>
                     <th>Grasa (Nomenclatura)</th>
                     <th>Detalle</th>
-                    <th class="text-end">Existencia Actual (Kg)</th>
-                    <th class="text-end">Consumo Proyectado (Kg)</th>
+                    <th class="text-end">Existencia Actual</th>
+                    <th class="text-end">Consumo Proyectado</th>
                     <th class="text-end">Diferencia</th>
                     <th>Acción Sugerida</th>
                 </tr>
@@ -28,13 +28,17 @@
             <tbody>
                 {% for row in forecast_data %}
                 <tr>
-                    <td><strong>{{ row.grease_type.nomenclatura }}</strong></td>
+                    <td>
+                        <a href="#" data-bs-toggle="modal" data-bs-target="#planDetailsModal{{ row.grease_type.id }}" class="text-decoration-none" title="Ver detalle de planes de empleo">
+                            <strong>{{ row.grease_type.nomenclatura }} <i class="fa-solid fa-circle-info ms-1 text-info fa-sm"></i></strong>
+                        </a>
+                    </td>
                     <td><small class="text-muted">{{ row.grease_type.presentacion }} {{ row.grease_type.unidad }}</small></td>
-                    <td class="text-end">{{ row.total_available|smart_number }}</td>
-                    <td class="text-end">{{ row.total_projected|smart_number }}</td>
+                    <td class="text-end">{{ row.total_available|smart_number }} <small class="text-muted">{{ row.grease_type.unidad }}</small></td>
+                    <td class="text-end">{{ row.total_projected|smart_number }} <small class="text-muted">{{ row.grease_type.unidad }}</small></td>
                     <td class="text-end">
                         <span class="badge {% if row.shortfall > 0 %}bg-danger{% else %}bg-success{% endif %} fs-6">
-                            {{ row.shortfall|smart_number }}
+                            {{ row.shortfall|abs_val|smart_number }} <small>{{ row.grease_type.unidad }}</small>
                         </span>
                     </td>
                     <td>
@@ -58,9 +62,66 @@
 <div class="alert alert-info mt-4 pb-0">
     <h5><i class="fa-solid fa-circle-info me-2"></i> Notas sobre la previsión</h5>
     <ul>
-        <li>El <strong>Consumo Proyectado</strong> se calcula analizando todos los "Planes de Vuelo" cargados en el sistema y multiplicando las "Horas Planificadas" por la "Tasa de Consumo por Hora" de cada aeronave asociada a la grasa.</li>
-        <li>Si la <strong>Diferencia</strong> es negativa (rojo), significa que el stock actual no alcanzará para cumplir los planes de vuelo previstos.</li>
+        <li>El <strong>Consumo Proyectado</strong> se calcula analizando todos los "Planes de Empleo" cargados en el sistema y multiplicando las "Horas Planificadas" por la "Tasa de Consumo por Hora" de cada aeronave asociada a la grasa.</li>
+        <li>Si la <strong>Diferencia</strong> es negativa (rojo), significa que el stock actual no alcanzará para cumplir los planes de empleo previstos.</li>
     </ul>
 </div>
+
+{% for row in forecast_data %}
+<!-- Modal para Detalles de Plan de Empleo {{ row.grease_type.id }} -->
+<div class="modal fade" id="planDetailsModal{{ row.grease_type.id }}" tabindex="-1" aria-labelledby="planDetailsModalLabel{{ row.grease_type.id }}" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="planDetailsModalLabel{{ row.grease_type.id }}">
+                    <i class="fa-solid fa-plane me-2"></i> Detalles de Planes de Empleo - {{ row.grease_type.nomenclatura }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body pb-0">
+                {% if row.plan_details %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered table-hover mb-3">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Aeronave</th>
+                                <th>Plan de Empleo</th>
+                                <th class="text-end">Horas Planificadas</th>
+                                <th class="text-end">Consumo ({{ row.grease_type.unidad }}/hr)</th>
+                                <th class="text-end">Consumo Proyectado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for detail in row.plan_details %}
+                            <tr>
+                                <td>{{ detail.aircraft.name }}</td>
+                                <td>{{ detail.plan.name }}<br><small class="text-muted">{{ detail.plan.period_start_date|date:"d/m/Y" }} - {{ detail.plan.period_end_date|date:"d/m/Y" }}</small></td>
+                                <td class="text-end">{{ detail.plan.planned_hours }} hr</td>
+                                <td class="text-end">{{ detail.rate }}</td>
+                                <td class="text-end text-primary"><strong>{{ detail.projected|smart_number }} {{ row.grease_type.unidad }}</strong></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <th colspan="4" class="text-end">Total Proyectado:</th>
+                                <th class="text-end text-primary fs-6"><strong>{{ row.total_projected|smart_number }} {{ row.grease_type.unidad }}</strong></th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i> No hay planes de empleo registrados que consuman esta grasa.
+                </div>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
 
 {% endblock %}
