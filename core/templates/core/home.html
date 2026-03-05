@@ -17,6 +17,43 @@
 
 {% if user.is_authenticated %}
 
+<div class="row mt-2">
+    <!-- Fast Access Cards using generic info for now - will be replaced with dashboard logic later if needed -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow-sm h-100 border-start border-primary border-4">
+            <div class="card-body">
+                <h5 class="card-title text-primary"><i class="fa-solid fa-plane me-2"></i> Flota</h5>
+                <p class="card-text text-muted">Gestión de Unidades y Modelos de Aeronaves.</p>
+                <a href="{% url 'aircraft_list' %}" class="btn btn-outline-primary btn-sm">Ver Aeronaves</a>
+                <a href="{% url 'unit_list' %}" class="btn btn-outline-secondary btn-sm">Ver Unidades</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card shadow-sm h-100 border-start border-success border-4">
+            <div class="card-body">
+                <h5 class="card-title text-success"><i class="fa-solid fa-oil-can me-2"></i> Catálogo</h5>
+                <p class="card-text text-muted">Gestión de Tipos de Grasas y Especificaciones.</p>
+                <a href="{% url 'grease_list' %}" class="btn btn-outline-success btn-sm">Ver Catálogo</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card shadow-sm h-100 border-start border-warning border-4">
+            <div class="card-body">
+                <h5 class="card-title text-warning"><i class="fa-solid fa-boxes-stacked me-2"></i> Logística</h5>
+                <p class="card-text text-muted">Control de Stock, Consumos y Abastecimiento.</p>
+                <div class="d-grid gap-2">
+                    <a href="{% url 'batch_list' %}" class="btn btn-outline-warning btn-sm">Gestionar Stock</a>
+                    <a href="{% url 'procurement_forecast' %}" class="btn btn-outline-info btn-sm">Análisis de Abastecimiento</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% if stock_alerts %}
 <div class="row mt-2 mb-4">
     <div class="col-12">
@@ -88,42 +125,5 @@
     </div>
 </div>
 {% endif %}
-
-<div class="row mt-2">
-    <!-- Fast Access Cards using generic info for now - will be replaced with dashboard logic later if needed -->
-    <div class="col-md-4 mb-4">
-        <div class="card shadow-sm h-100 border-start border-primary border-4">
-            <div class="card-body">
-                <h5 class="card-title text-primary"><i class="fa-solid fa-plane me-2"></i> Flota</h5>
-                <p class="card-text text-muted">Gestión de Unidades y Modelos de Aeronaves.</p>
-                <a href="{% url 'aircraft_list' %}" class="btn btn-outline-primary btn-sm">Ver Aeronaves</a>
-                <a href="{% url 'unit_list' %}" class="btn btn-outline-secondary btn-sm">Ver Unidades</a>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4 mb-4">
-        <div class="card shadow-sm h-100 border-start border-success border-4">
-            <div class="card-body">
-                <h5 class="card-title text-success"><i class="fa-solid fa-oil-can me-2"></i> Catálogo</h5>
-                <p class="card-text text-muted">Gestión de Tipos de Grasas y Especificaciones.</p>
-                <a href="{% url 'grease_list' %}" class="btn btn-outline-success btn-sm">Ver Catálogo</a>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4 mb-4">
-        <div class="card shadow-sm h-100 border-start border-warning border-4">
-            <div class="card-body">
-                <h5 class="card-title text-warning"><i class="fa-solid fa-boxes-stacked me-2"></i> Logística</h5>
-                <p class="card-text text-muted">Control de Stock, Consumos y Abastecimiento.</p>
-                <div class="d-grid gap-2">
-                    <a href="{% url 'batch_list' %}" class="btn btn-outline-warning btn-sm">Gestionar Stock</a>
-                    <a href="{% url 'procurement_forecast' %}" class="btn btn-outline-info btn-sm">Análisis de Abastecimiento</a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 {% endif %}
 {% endblock %}

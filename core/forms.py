@@ -135,3 +135,32 @@ class GreaseReferencePriceForm(forms.ModelForm):
             # We don't have direct access to grease_type unit here in ModelForm init easily without passing it,
             # but we can just use the help_text from the model.
             pass
+
+class RetestBatchForm(forms.ModelForm):
+    extension_time = forms.CharField(
+        max_length=100,
+        required=True,
+        label="Tiempo Habilitado",
+        help_text="Por cuánto tiempo se extiende la habilitación (ej. '6 meses', '1 año')."
+    )
+    reason = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 3}), 
+        required=True, 
+        label="Resultado / Motivo del Retesteo", 
+        help_text="Documento de referencia o justificación técnica del ensayo aplicado."
+    )
+    
+    class Meta:
+        model = GreaseBatch
+        fields = ['expiration_date', 'available_quantity']
+        labels = {
+            'expiration_date': 'Nueva Fecha de Vencimiento',
+        }
+        widgets = {
+            'expiration_date': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['available_quantity'].help_text = "Ajustar si la muestra para laboratorio consumió material."
+

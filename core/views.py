@@ -13,7 +13,7 @@ import csv
 from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
 from .models import Unit, MeasurementUnit, AircraftModel, GreaseType, AircraftGrease, FlightPlan, GreaseBatch, StockMovement, GreaseReferencePrice
-from .forms import UnitForm, MeasurementUnitForm, AircraftModelForm, GreaseTypeForm, AircraftGreaseForm, FlightPlanForm, GreaseBatchForm, ConsumeGreaseForm, GreaseReferencePriceForm
+from .forms import UnitForm, MeasurementUnitForm, AircraftModelForm, GreaseTypeForm, AircraftGreaseForm, FlightPlanForm, GreaseBatchForm, ConsumeGreaseForm, GreaseReferencePriceForm, RetestBatchForm
 from .services import update_batch_statuses, consume_grease
 from django.db.models import ProtectedError
 
@@ -364,6 +364,46 @@ class GreaseBatchDeleteView(LogisticsRequiredMixin, DeleteView):
         
         messages.success(request, f"El lote {self.object.batch_number} fue eliminado exitosamente.")
         return super().post(request, *args, **kwargs)
+
+class RetestBatchView(LogisticsRequiredMixin, UpdateView):
+    model = GreaseBatch
+    form_class = RetestBatchForm
+    template_name = 'core/form_base.html'
+    
+    def get_success_url(self):
+        return reverse_lazy('batch_detail', kwargs={'pk': self.object.pk})
+        
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['title'] = f'Retestear Lote {self.object.batch_number} - {self.object.grease_type.nomenclatura}'
+        return context
+
+    @transaction.atomic
+    def form_valid(self, form):
+        reason = form.cleaned_data['reason']
+        extension_time = form.cleaned_data['extension_time']
+        
+        # Calcular diferencia si el usuario modificó la disponibilidad por consumo de laboratorio
+        old_quantity = form.initial.get('available_quantity', 0)
+        new_quantity = form.cleaned_data.get('available_quantity', 0)
+        diff = new_quantity - old_quantity
+
+        response = super().form_valid(form)
+        
+        # registrar movimiento
+        StockMovement.objects.create(
+            batch=self.object,
+            movement_type='RETEST',
+            quantity_changed=diff,
+            user=self.request.user,
+            reason=f"Retesteo / Extensión de Vencimiento. Tiempo Habilitado: {extension_time}. {reason}"
+        )
+        
+        # update batch status based on new expiration
+        update_batch_statuses()
+        
+        messages.success(self.request, "Retesteo registrado y lote actualizado exitosamente.")
+        return response
 
 # --- Procurement Forecasting ---
 class ProcurementForecastingView(LoginRequiredMixin, TemplateView):

@@ -167,6 +167,7 @@ class StockMovement(models.Model):
         ('INCOMING', 'Ingreso inicial'),
         ('CONSUMPTION', 'Consumo operativo'),
         ('ADJUSTMENT', 'Ajuste de inventario/Auditoría'),
+        ('RETEST', 'Retesteo / Extensión de Vencimiento'),
     ]
     batch = models.ForeignKey(GreaseBatch, on_delete=models.PROTECT, related_name="movements", verbose_name="Lote")
     movement_type = models.CharField(max_length=20, choices=MOVEMENT_TYPES, verbose_name="Tipo de Movimiento")

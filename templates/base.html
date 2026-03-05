@@ -48,28 +48,16 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'flightplan_list' %}">Planes de Empleo</a>
                     </li>
-                    <li class="nav-item fw-bold border-start border-1 border-secondary ps-2 ms-1">
-                        <a class="nav-link text-warning" href="{% url 'batch_list' %}"><i class="fa-solid fa-boxes-stacked me-1"></i> Stock / Lotes</a>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'batch_list' %}">Stock / Lotes</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link text-info" href="{% url 'procurement_forecast' %}"><i class="fa-solid fa-chart-line me-1"></i> Abastecimiento</a>
+                        <a class="nav-link" href="{% url 'procurement_forecast' %}">Abastecimiento</a>
                     </li>
                     {% endif %}
                 </ul>
                 <ul class="navbar-nav ms-auto">
                     {% if user.is_authenticated %}
-                        {% if user.is_staff or 'Administrador' in user.groups.all|join:',' or 'Logistica' in user.groups.all|join:',' %}
-                        <li class="nav-item dropdown me-2">
-                            <a class="nav-link dropdown-toggle text-secondary" href="#" id="configDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Configuración del Sistema">
-                                <i class="fa-solid fa-gear fs-5"></i>
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="configDropdown">
-                                <li><h6 class="dropdown-header">Diccionarios del Sistema</h6></li>
-                                <li><a class="dropdown-item" href="{% url 'measurementunit_list' %}"><i class="fa-solid fa-scale-balanced me-2"></i>Unidades de Medida</a></li>
-                                <!-- More config entries can go here in the future -->
-                            </ul>
-                        </li>
-                        {% endif %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="fa-solid fa-user me-1"></i> {{ user.username }}
@@ -87,6 +75,18 @@
                                 </li>
                             </ul>
                         </li>
+                        {% if user.is_staff or 'Administrador' in user.groups.all|join:',' or 'Logistica' in user.groups.all|join:',' %}
+                        <li class="nav-item dropdown ms-2">
+                            <a class="nav-link dropdown-toggle" href="#" id="configDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Configuración del Sistema">
+                                <i class="fa-solid fa-gear"></i>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="configDropdown">
+                                <li><h6 class="dropdown-header">Diccionarios del Sistema</h6></li>
+                                <li><a class="dropdown-item" href="{% url 'measurementunit_list' %}"><i class="fa-solid fa-scale-balanced me-2"></i>Unidades de Medida</a></li>
+                                <!-- More config entries can go here in the future -->
+                            </ul>
+                        </li>
+                        {% endif %}
                     {% else %}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'login' %}">Iniciar Sesión</a>
