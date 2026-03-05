@@ -1,0 +1,22 @@
+from django import template
+from decimal import Decimal
+
+register = template.Library()
+
+@register.filter
+def smart_number(value):
+    """
+    Format a number to drop decimal part if it's zero, 
+    but preserve true decimal precision (e.g. 0.2000 -> 0.2).
+    """
+    try:
+        if isinstance(value, Decimal):
+            d = value.normalize()
+            return int(d) if d == d.to_integral() else d
+            
+        f_val = float(value)
+        if f_val.is_integer():
+            return int(f_val)
+        return f_val
+    except (ValueError, TypeError):
+        return value
