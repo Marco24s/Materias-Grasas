@@ -137,11 +137,11 @@ class GreaseReferencePriceForm(forms.ModelForm):
             pass
 
 class RetestBatchForm(forms.ModelForm):
-    extension_time = forms.CharField(
-        max_length=100,
+    extension_years = forms.FloatField(
         required=True,
-        label="Tiempo Habilitado",
-        help_text="Por cuánto tiempo se extiende la habilitación (ej. '6 meses', '1 año')."
+        min_value=0.1,
+        label="Años Habilitados",
+        help_text="Por cuántos años se extiende la habilitación (ej. '0.5' para medio año, '1.5', '2')."
     )
     reason = forms.CharField(
         widget=forms.Textarea(attrs={'rows': 3}), 
@@ -152,12 +152,9 @@ class RetestBatchForm(forms.ModelForm):
     
     class Meta:
         model = GreaseBatch
-        fields = ['expiration_date', 'available_quantity']
+        fields = ['extension_years', 'available_quantity', 'can_be_retested', 'reason']
         labels = {
-            'expiration_date': 'Nueva Fecha de Vencimiento',
-        }
-        widgets = {
-            'expiration_date': forms.DateInput(attrs={'type': 'date'}),
+            'can_be_retested': 'Puede volver a retestearse',
         }
 
     def __init__(self, *args, **kwargs):

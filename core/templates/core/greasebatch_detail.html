@@ -8,10 +8,14 @@
         <h2 class="mt-2"><i class="fa-solid fa-box-open me-2"></i> Detalle Lote: {{ batch.batch_number }}</h2>
     </div>
     <div>
-        {% if batch.status == 'EXPIRED' or batch.status == 'NEAR_EXPIRATION' or batch.status == 'PENDING_RECERTIFICATION' %}
-            <a href="{% url 'batch_retest' batch.id %}" class="btn btn-warning shadow-sm"><i class="fa-solid fa-vial-circle-check me-2"></i> Retestear Lote</a>
+        {% if batch.can_be_retested %}
+            {% if batch.status == 'EXPIRED' or batch.status == 'NEAR_EXPIRATION' or batch.status == 'PENDING_RECERTIFICATION' %}
+                <a href="{% url 'batch_retest' batch.id %}" class="btn btn-warning shadow-sm"><i class="fa-solid fa-vial-circle-check me-2"></i> Retestear Lote</a>
+            {% else %}
+                <a href="{% url 'batch_retest' batch.id %}" class="btn btn-outline-secondary shadow-sm btn-sm" title="Extender Vencimiento"><i class="fa-solid fa-vial me-2"></i> Retestear</a>
+            {% endif %}
         {% else %}
-            <a href="{% url 'batch_retest' batch.id %}" class="btn btn-outline-secondary shadow-sm btn-sm" title="Extender Vencimiento"><i class="fa-solid fa-vial me-2"></i> Retestear</a>
+            <span class="badge bg-secondary fs-6"><i class="fa-solid fa-ban me-1"></i> No admite retesteo posterior</span>
         {% endif %}
     </div>
 </div>
@@ -28,6 +32,9 @@
                 <p>
                     <strong>Vencimiento:</strong> {{ batch.expiration_date|date:"d M Y" }} 
                     <span class="badge {% if batch.status == 'EXPIRED' %}bg-danger{% elif batch.status == 'NEAR_EXPIRATION' %}bg-warning text-dark{% else %}bg-success{% endif %} ms-2">{{ batch.get_status_display }}</span>
+                    {% if not batch.can_be_retested %}
+                    <span class="badge bg-dark ms-1" title="Este lote alcanzó su límite de vida útil y ya no puede extenderse más allá de esta fecha."><i class="fa-solid fa-ban me-1"></i>Vencimiento Definitivo</span>
+                    {% endif %}
                 </p>
                 <p><strong>Ubicación:</strong> {{ batch.storage_location }}</p>
                 <h4 class="mt-4 text-primary">Disponible / Inicial</h4>

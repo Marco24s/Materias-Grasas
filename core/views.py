@@ -381,7 +381,22 @@ class RetestBatchView(LogisticsRequiredMixin, UpdateView):
     @transaction.atomic
     def form_valid(self, form):
         reason = form.cleaned_data['reason']
-        extension_time = form.cleaned_data['extension_time']
+        extension_years = form.cleaned_data['extension_years']
+        can_be_retested = form.cleaned_data['can_be_retested']
+        
+        # Calculate new expiration date (based on today or previous expiration, let's use today since it's a retest from now)
+        from datetime import date
+        from dateutil.relativedelta import relativedelta
+        
+        # Alternatively, we could extend from the old expiration date. But normally a retest is valid from the date of the retest.
+        # Let's extend from today, or let's use the old date if it's still in the future.
+        base_date = date.today() if self.object.expiration_date < date.today() else self.object.expiration_date
+        
+        months_to_add = int(extension_years * 12)
+        new_expiration = base_date + relativedelta(months=months_to_add)
+        
+        self.object.expiration_date = new_expiration
+        self.object.can_be_retested = can_be_retested
         
         # Calcular diferencia si el usuario modificó la disponibilidad por consumo de laboratorio
         old_quantity = form.initial.get('available_quantity', 0)
@@ -396,11 +411,13 @@ class RetestBatchView(LogisticsRequiredMixin, UpdateView):
             movement_type='RETEST',
             quantity_changed=diff,
             user=self.request.user,
-            reason=f"Retesteo / Extensión de Vencimiento. Tiempo Habilitado: {extension_time}. {reason}"
+            reason=f"Retesteo / Extensión de Vencimiento. Años Habilitados: {extension_years} ({months_to_add} meses). {reason}"
         )
         
         # update batch status based on new expiration
         update_batch_statuses()
+        
+        self.object.save()
         
         messages.success(self.request, "Retesteo registrado y lote actualizado exitosamente.")
         return response

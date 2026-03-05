@@ -143,6 +143,7 @@ class GreaseBatch(models.Model):
     unit_price = models.DecimalField(max_digits=14, decimal_places=6, verbose_name="Costo Unitario Real ($)", blank=True, null=True, help_text="Costo real calculado por unidad (Kg/L).")
     storage_location = models.CharField(max_length=100, verbose_name="Ubicación (Almacén/Unidad)")
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='SERVICEABLE', verbose_name="Estado")
+    can_be_retested = models.BooleanField(default=True, verbose_name="¿Admite retesteo futuro?", help_text="Indica si este lote puede ser sometido a un nuevo retesteo cuando venza.")
 
     class Meta:
         verbose_name = "Lote de Grasa"

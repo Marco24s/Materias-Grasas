@@ -15,12 +15,18 @@ def update_batch_statuses():
         status__in=['SERVICEABLE', 'NEAR_EXPIRATION']
     ).update(status='EXPIRED')
     
-    # Próximos a vencer
+    # Próximos a vencer (asegurar de no pisar vencidos por fecha si alguien los cambió a mano, aunque arriba ya se filtran)
     GreaseBatch.objects.filter(
         expiration_date__gt=today,
         expiration_date__lte=warning_date,
-        status='SERVICEABLE'
+        status__in=['SERVICEABLE', 'EXPIRED'] # Added EXPIRED here to catch retests that are now near expiration
     ).update(status='NEAR_EXPIRATION')
+    
+    # Revertir lotes extendidos ("Retesteados") a Serviceable si ahora su vencimiento es mayor a 6 meses
+    GreaseBatch.objects.filter(
+        expiration_date__gt=warning_date,
+        status__in=['EXPIRED', 'NEAR_EXPIRATION']
+    ).update(status='SERVICEABLE')
 
 
 @transaction.atomic
