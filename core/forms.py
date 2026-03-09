@@ -44,6 +44,30 @@ class AircraftGreaseForm(forms.ModelForm):
     class Meta:
         model = AircraftGrease
         fields = ['aircraft_model', 'grease_type', 'hourly_consumption_rate', 'notes']
+        
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Deduplicate greases by nomenclatura for the dropdown
+        # We find the first ID for each unique nomenclatura to represent the "type".
+        unique_greases = {}
+        for gt in GreaseType.objects.all():
+            if gt.nomenclatura not in unique_greases:
+                unique_greases[gt.nomenclatura] = gt.id
+        
+        # In case we're editing, we must ensure the currently selected grease is in the choices
+        if self.instance and self.instance.pk and self.instance.grease_type:
+            current_gt = self.instance.grease_type
+            if current_gt.nomenclatura in unique_greases:
+                # Override the representative ID with the one actually saved
+                unique_greases[current_gt.nomenclatura] = current_gt.id
+                
+        allowed_ids = list(unique_greases.values())
+        
+        self.fields['grease_type'].queryset = GreaseType.objects.filter(id__in=allowed_ids).order_by('nomenclatura')
+        
+        # Adjust the label function slightly to not show presentation if we want it completely clean
+        self.fields['grease_type'].label_from_instance = lambda obj: obj.nomenclatura
 
 class FlightPlanForm(forms.ModelForm):
     class Meta:
@@ -123,7 +147,7 @@ class ConsumeGreaseForm(forms.Form):
 class GreaseReferencePriceForm(forms.ModelForm):
     class Meta:
         model = GreaseReferencePrice
-        fields = ['price', 'presentation_quantity', 'supplier']
+        fields = ['price', 'presentation_quantity', 'supplier', 'is_active']
         widgets = {
             'price': forms.NumberInput(attrs={'step': '0.01'}),
             'presentation_quantity': forms.NumberInput(attrs={'step': '0.01'}),

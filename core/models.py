@@ -45,7 +45,7 @@ class AircraftModel(models.Model):
 class GreaseType(models.Model):
     unidad = models.CharField(max_length=50, verbose_name="UNIDAD")
     presentacion = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="PRESENTACIÓN")
-    nomenclatura = models.CharField(max_length=150, unique=True, verbose_name="NOMENCLATURA")
+    nomenclatura = models.CharField(max_length=150, verbose_name="NOMENCLATURA")
     nne_nsn = models.CharField(max_length=100, verbose_name="N.N.E. / N.S.N.", blank=True, null=True)
     sibys = models.CharField(max_length=100, verbose_name="SIBYS", blank=True, null=True)
     nato = models.CharField(max_length=100, verbose_name="NATO", blank=True, null=True)
@@ -57,13 +57,14 @@ class GreaseType(models.Model):
     class Meta:
         verbose_name = "Tipo de Grasa / Aceite"
         verbose_name_plural = "Tipos de Grasas / Aceites"
+        unique_together = ('nomenclatura', 'presentacion')
 
     def __str__(self):
         return f"{self.nomenclatura} ({self.presentacion} {self.unidad})"
 
     def get_average_unit_price(self):
         """Calcula el costo promedio por unidad (1Kg o 1L) basado en los precios de referencia."""
-        prices = self.reference_prices.all()
+        prices = self.reference_prices.filter(is_active=True)
         if not prices:
             return None
         total = sum(p.get_unit_price() for p in prices if p.get_unit_price() is not None)
@@ -194,6 +195,7 @@ class GreaseReferencePrice(models.Model):
     price = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Precio de la Presentación ($)")
     presentation_quantity = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Cantidad en la Presentación (Kg/L)", help_text="Ej: Para una lata de 5kg que vale $5000, ingrese 5. El costo unitario será $1000/kg.")
     supplier = models.CharField(max_length=150, blank=True, null=True, verbose_name="Proveedor (Opcional)")
+    is_active = models.BooleanField(default=True, verbose_name="Utilizar para Promedio", help_text="Si está marcado, este precio se incluirá en el cálculo del costo promedio.")
     date_recorded = models.DateField(auto_now_add=True, verbose_name="Fecha de Registro")
 
     class Meta:

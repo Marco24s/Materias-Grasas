@@ -27,6 +27,7 @@ urlpatterns = [
     path('greases/<int:pk>/edit/', views.GreaseTypeUpdateView.as_view(), name='grease_update'),
     path('greases/<int:pk>/prices/', views.GreaseReferencePriceListView.as_view(), name='grease_price_list'),
     path('greases/<int:pk>/prices/add/', views.GreaseReferencePriceCreateView.as_view(), name='grease_price_create'),
+    path('greases/prices/<int:pk>/edit/', views.GreaseReferencePriceUpdateView.as_view(), name='grease_price_update'),
     path('greases/prices/<int:pk>/delete/', views.GreaseReferencePriceDeleteView.as_view(), name='grease_price_delete'),
     
     # Aircraft - Grease Associations

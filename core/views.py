@@ -42,19 +42,31 @@ def home(request):
         
         # Alertas de Stock Mínimo (Previsión de Abastecimiento)
         grease_types = GreaseType.objects.all()
+        forecast_dict = {}
         for gt in grease_types:
             total_available = sum(b.available_quantity for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION']))
-            total_projected = 0
+            
+            if gt.nomenclatura not in forecast_dict:
+                forecast_dict[gt.nomenclatura] = {
+                    'grease_type': gt,
+                    'available': 0,
+                    'plan_details_map': {}
+                }
+                
+            forecast_dict[gt.nomenclatura]['available'] += total_available
             
             for assoc in gt.aircraft_associations.all():
                 for plan in assoc.aircraft_model.flight_plans.all():
-                    total_projected += (assoc.hourly_consumption_rate * plan.planned_hours)
+                    proj = assoc.hourly_consumption_rate * plan.planned_hours
+                    forecast_dict[gt.nomenclatura]['plan_details_map'][(assoc.aircraft_model.id, plan.id)] = proj
                     
-            if total_projected > total_available:
+        for nom, data in forecast_dict.items():
+            total_projected = sum(data['plan_details_map'].values())
+            if total_projected > data['available']:
                 stock_alerts.append({
-                    'grease_type': gt,
-                    'shortfall': total_projected - total_available,
-                    'available': total_available,
+                    'grease_type': data['grease_type'],
+                    'shortfall': total_projected - data['available'],
+                    'available': data['available'],
                     'projected': total_projected
                 })
 
@@ -207,6 +219,21 @@ class GreaseReferencePriceCreateView(LogisticsRequiredMixin, SuccessMessageMixin
 
     def get_success_url(self):
         return reverse_lazy('grease_price_list', kwargs={'pk': self.kwargs['pk']})
+
+class GreaseReferencePriceUpdateView(LogisticsRequiredMixin, SuccessMessageMixin, UpdateView):
+    model = GreaseReferencePrice
+    form_class = GreaseReferencePriceForm
+    template_name = 'core/form_base.html'
+    success_message = "Cotización / Precio de Referencia actualizado exitosamente."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        gt = self.object.grease_type
+        context['title'] = f'Editar Precio de Referencia - {gt.nomenclatura}'
+        return context
+
+    def get_success_url(self):
+        return reverse_lazy('grease_price_list', kwargs={'pk': self.object.grease_type_id})
 
 class GreaseReferencePriceDeleteView(LogisticsRequiredMixin, SuccessMessageMixin, DeleteView):
     model = GreaseReferencePrice
@@ -429,38 +456,46 @@ class ProcurementForecastingView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         grease_types = GreaseType.objects.all()
-        forecast_data = []
+        forecast_dict = {}
 
         update_batch_statuses()
 
         for gt in grease_types:
             total_available = sum(b.available_quantity for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION']))
             
-            total_projected = 0
-            plan_details = []
+            if gt.nomenclatura not in forecast_dict:
+                forecast_dict[gt.nomenclatura] = {
+                    'grease_type': gt,
+                    'total_available': 0,
+                    'plan_details_map': {}
+                }
+                
+            forecast_dict[gt.nomenclatura]['total_available'] += total_available
+            
             for assoc in gt.aircraft_associations.all():
                 for plan in assoc.aircraft_model.flight_plans.all():
-                    # Para el MVP, suma todos los planes. En prod se filtraría por >= today o por periodo específico
                     projected_for_plan = assoc.hourly_consumption_rate * plan.planned_hours
-                    total_projected += projected_for_plan
-                    plan_details.append({
-                        'aircraft': assoc.aircraft_model,
-                        'plan': plan,
-                        'rate': assoc.hourly_consumption_rate,
-                        'projected': projected_for_plan
-                    })
-                    
-            shortfall = total_projected - total_available
-            recommended_purchase = shortfall if shortfall > 0 else 0
+                    plan_key = (assoc.aircraft_model.id, plan.id)
+                    # Deduplicamos por avión y plan para evitar doble conteo si
+                    # múltiples presentaciones se asocian al mismo avión.
+                    if plan_key not in forecast_dict[gt.nomenclatura]['plan_details_map']:
+                        forecast_dict[gt.nomenclatura]['plan_details_map'][plan_key] = {
+                            'aircraft': assoc.aircraft_model,
+                            'plan': plan,
+                            'rate': assoc.hourly_consumption_rate,
+                            'projected': projected_for_plan
+                        }
             
-            forecast_data.append({
-                'grease_type': gt,
-                'total_available': total_available,
-                'total_projected': total_projected,
-                'shortfall': shortfall,
-                'recommended_purchase': recommended_purchase,
-                'plan_details': plan_details
-            })
+        forecast_data = []
+        for nom, data in forecast_dict.items():
+            data['plan_details'] = list(data['plan_details_map'].values())
+            data['total_projected'] = sum(p['projected'] for p in data['plan_details'])
+            
+            shortfall = data['total_projected'] - data['total_available']
+            data['shortfall'] = shortfall if shortfall > 0 else 0
+            data['recommended_purchase'] = data['shortfall']
+            
+            forecast_data.append(data)
             
         context['forecast_data'] = forecast_data
         return context
@@ -497,19 +532,31 @@ def export_procurement_forecast_csv(request):
     writer = csv.writer(response)
     writer.writerow(['Tipo de Grasa', 'Stock Disponible', 'Consumo Proyectado', 'Diferencia (Sobrante/Faltante)', 'Compra Recomendada'])
     
+    forecast_dict = {}
     for gt in GreaseType.objects.all():
         total_available = sum(b.available_quantity for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION']))
-        total_projected = 0
+        
+        if gt.nomenclatura not in forecast_dict:
+            forecast_dict[gt.nomenclatura] = {
+                'available': 0,
+                'plan_details_map': {}
+            }
+            
+        forecast_dict[gt.nomenclatura]['available'] += total_available
+        
         for assoc in gt.aircraft_associations.all():
             for plan in assoc.aircraft_model.flight_plans.all():
-                total_projected += (assoc.hourly_consumption_rate * plan.planned_hours)
+                proj = assoc.hourly_consumption_rate * plan.planned_hours
+                forecast_dict[gt.nomenclatura]['plan_details_map'][(assoc.aircraft_model.id, plan.id)] = proj
                 
-        shortfall = total_projected - total_available
+    for nom, data in forecast_dict.items():
+        total_projected = sum(data['plan_details_map'].values())
+        shortfall = total_projected - data['available']
         recommended_purchase = shortfall if shortfall > 0 else 0
         
         writer.writerow([
-            gt.nomenclatura,
-            total_available,
+            nom,
+            data['available'],
             total_projected,
             shortfall,
             recommended_purchase
@@ -578,17 +625,31 @@ def export_procurement_forecast_pdf(request):
     
     data = [['Tipo de Grasa', 'Stock\nDisponible', 'Consumo\nProyectado', 'Diferencia\n(Sobrante/Faltante)', 'Recomendación\nde Compra']]
     
+    forecast_dict = {}
     for gt in GreaseType.objects.all():
         total_available = sum(b.available_quantity for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION']))
-        total_projected = sum((assoc.hourly_consumption_rate * plan.planned_hours) 
-                              for assoc in gt.aircraft_associations.all() 
-                              for plan in assoc.aircraft_model.flight_plans.all())
-        shortfall = total_projected - total_available
+        
+        if gt.nomenclatura not in forecast_dict:
+            forecast_dict[gt.nomenclatura] = {
+                'available': 0,
+                'plan_details_map': {}
+            }
+            
+        forecast_dict[gt.nomenclatura]['available'] += total_available
+        
+        for assoc in gt.aircraft_associations.all():
+            for plan in assoc.aircraft_model.flight_plans.all():
+                proj = assoc.hourly_consumption_rate * plan.planned_hours
+                forecast_dict[gt.nomenclatura]['plan_details_map'][(assoc.aircraft_model.id, plan.id)] = proj
+                
+    for nom, f_data in forecast_dict.items():
+        total_projected = sum(f_data['plan_details_map'].values())
+        shortfall = total_projected - f_data['available']
         recommended_purchase = shortfall if shortfall > 0 else 0
         
         data.append([
-            gt.nomenclatura,
-            str(round(total_available, 2)),
+            nom,
+            str(round(f_data['available'], 2)),
             str(round(total_projected, 2)),
             str(round(shortfall, 2)),
             str(round(recommended_purchase, 2))
