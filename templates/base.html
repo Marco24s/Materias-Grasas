@@ -206,8 +206,20 @@
                             let rowsToSort = emptyRow ? rows.filter(r => r !== emptyRow) : rows;
 
                             rowsToSort.sort((a, b) => {
-                                let valA = a.cells[index].textContent.trim();
-                                let valB = b.cells[index].textContent.trim();
+                                let cellA = a.cells[index];
+                                let cellB = b.cells[index];
+                                
+                                let dataSortA = cellA.getAttribute('data-sort');
+                                let dataSortB = cellB.getAttribute('data-sort');
+                                
+                                if (dataSortA !== null && dataSortB !== null) {
+                                    return sortOrder === 'asc' 
+                                        ? dataSortB.localeCompare(dataSortA) 
+                                        : dataSortA.localeCompare(dataSortB);
+                                }
+
+                                let valA = cellA.textContent.trim();
+                                let valB = cellB.textContent.trim();
 
                                 // Intentar orden numérico si es posible
                                 const numA = parseFloat(valA.replace(/[^0-9.-]+/g,""));

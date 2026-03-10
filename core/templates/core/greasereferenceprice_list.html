@@ -46,7 +46,7 @@
             <tbody>
                 {% for price in prices %}
                 <tr>
-                    <td>{{ price.date_recorded|date:"d/m/Y" }}</td>
+                    <td data-sort="{{ price.date_recorded|date:'Y-m-d' }}">{{ price.date_recorded|date:"d/m/Y" }}</td>
                     <td>{{ price.supplier|default:"-" }}</td>
                     <td>{{ price.presentation_quantity|smart_number }} {{ grease_type.unidad }}</td>
                     <td><strong>${{ price.price|smart_number }}</strong></td>

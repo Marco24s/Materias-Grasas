@@ -53,11 +53,12 @@ class GreaseType(models.Model):
     
     shelf_life_months = models.PositiveIntegerField(verbose_name="Vida Útil Total (Meses)")
     recertification_allowed = models.BooleanField(default=False, verbose_name="Permite Re-certificación")
+    minimum_stock = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Stock Mínimo Permanente", help_text="Punto de pedido. El sistema enviará alertas si el stock cae por debajo de esta cantidad.")
 
     class Meta:
         verbose_name = "Tipo de Grasa / Aceite"
         verbose_name_plural = "Tipos de Grasas / Aceites"
-        unique_together = ('nomenclatura', 'presentacion')
+        unique_together = ('nomenclatura', 'presentacion', 'normas_mil_otras')
 
     def __str__(self):
         return f"{self.nomenclatura} ({self.presentacion} {self.unidad})"

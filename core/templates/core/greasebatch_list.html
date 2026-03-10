@@ -35,7 +35,7 @@
                 <tr class="{% if batch.status == 'EXPIRED' %}table-danger{% elif batch.status == 'NEAR_EXPIRATION' %}table-warning{% endif %}">
                     <td><strong>{{ batch.batch_number }}</strong></td>
                     <td>{{ batch.grease_type.nomenclatura }}</td>
-                    <td>{{ batch.expiration_date|date:"d M Y" }}</td>
+                    <td data-sort="{{ batch.expiration_date|date:'Y-m-d' }}">{{ batch.expiration_date|date:"d M Y" }}</td>
                     <td>
                         {% if batch.status == 'SERVICEABLE' %}
                             <span class="badge bg-success"><i class="fa-solid fa-check"></i> Retesteable</span>

@@ -19,7 +19,7 @@ class AircraftModelForm(forms.ModelForm):
 class GreaseTypeForm(forms.ModelForm):
     class Meta:
         model = GreaseType
-        fields = ['nomenclatura', 'unidad', 'presentacion', 'nne_nsn', 'sibys', 'nato', 'normas_mil_otras', 'shelf_life_months', 'recertification_allowed']
+        fields = ['nomenclatura', 'unidad', 'presentacion', 'nne_nsn', 'sibys', 'nato', 'normas_mil_otras', 'shelf_life_months', 'recertification_allowed', 'minimum_stock']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

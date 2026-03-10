@@ -30,6 +30,7 @@ class LogisticsRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
 def home(request):
     expiration_alerts = []
     stock_alerts = []
+    critical_stock_alerts = []
     
     if request.user.is_authenticated:
         update_batch_statuses()
@@ -50,10 +51,12 @@ def home(request):
                 forecast_dict[gt.nomenclatura] = {
                     'grease_type': gt,
                     'available': 0,
+                    'minimum_stock': 0,
                     'plan_details_map': {}
                 }
                 
             forecast_dict[gt.nomenclatura]['available'] += total_available
+            forecast_dict[gt.nomenclatura]['minimum_stock'] += gt.minimum_stock
             
             for assoc in gt.aircraft_associations.all():
                 for plan in assoc.aircraft_model.flight_plans.all():
@@ -69,10 +72,20 @@ def home(request):
                     'available': data['available'],
                     'projected': total_projected
                 })
-
+                
+            # Alertas de Stock Crítico (por debajo del Stock Mínimo)
+            if data['available'] < data['minimum_stock']:
+                critical_stock_alerts.append({
+                    'grease_type': data['grease_type'],
+                    'available': data['available'],
+                    'minimum_stock': data['minimum_stock'],
+                    'shortfall': data['minimum_stock'] - data['available']
+                })
+                
     return render(request, 'core/home.html', {
         'alerts': expiration_alerts,
-        'stock_alerts': stock_alerts
+        'stock_alerts': stock_alerts,
+        'critical_stock_alerts': critical_stock_alerts
     })
 
 # --- Units ---
