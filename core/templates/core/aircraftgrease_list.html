@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
-    <h2><i class="fa-solid fa-link me-2"></i> Asociaciones y Consumos Teóricos</h2>
+    <h2><i class="fa-solid fa-link me-2"></i> Factores de Planeo</h2>
     {% if user.is_staff or 'Logistica' in user.groups.all|join:',' or 'Administrador' in user.groups.all|join:',' %}
     <a href="{% url 'association_create' %}" class="btn btn-primary"><i class="fa-solid fa-plus me-1"></i> Nueva Asociación</a>
     {% endif %}
@@ -37,7 +37,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="5" class="text-center py-4 text-muted">No hay asociaciones registradas.</td>
+                    <td colspan="5" class="text-center py-4 text-muted">No hay factores de planeo registrados.</td>
                 </tr>
                 {% endfor %}
             </tbody>

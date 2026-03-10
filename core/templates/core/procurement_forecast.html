@@ -44,6 +44,8 @@
                     <td>
                         {% if row.shortfall > 0 %}
                             <a href="#" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-cart-plus"></i> Iniciar Adquisición</a>
+                        {% elif row.total_available <= 0 %}
+                            <span class="text-muted"><i class="fa-solid fa-box-open"></i> Sin Stock</span>
                         {% else %}
                             <span class="text-success"><i class="fa-solid fa-check"></i> Stock Suficiente</span>
                         {% endif %}

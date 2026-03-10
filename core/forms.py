@@ -108,9 +108,16 @@ class GreaseBatchForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
+        
         # Populate choices dynamically from Unit models
         unit_choices = [(unit.name, unit.name) for unit in Unit.objects.all()]
+        
+        # Filter choices if the user is a unit user
+        if user and not (user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()):
+            if user.unit:
+                unit_choices = [(user.unit.name, user.unit.name)]
         
         # If there's an instance (editing), ensure its current value is in the choices
         if self.instance and self.instance.pk and self.instance.storage_location:
@@ -118,8 +125,12 @@ class GreaseBatchForm(forms.ModelForm):
             if not any(current_loc == choice[0] for choice in unit_choices):
                 unit_choices.insert(0, (current_loc, f"{current_loc} (Actual)"))
         
-        # Add an empty choice at the top
-        unit_choices.insert(0, ('', 'Seleccione una Unidad...'))
+        # Add an empty choice at the top if there's more than one choice
+        if len(unit_choices) > 1 or getattr(self.instance, 'pk', None):
+            unit_choices.insert(0, ('', 'Seleccione una Unidad...'))
+        elif len(unit_choices) == 1:
+            # Seleccionar automáticamente la única opción si solo hay una (ej. usuario de unidad)
+            self.initial['storage_location'] = unit_choices[0][0]
         
         self.fields['storage_location'] = forms.ChoiceField(
             choices=unit_choices,
@@ -143,6 +154,18 @@ class ConsumeGreaseForm(forms.Form):
     quantity = forms.DecimalField(max_digits=10, decimal_places=2, min_value=0.01, label="Cantidad a Consumir")
     reference = forms.CharField(max_length=255, required=False, label="Referencia (e.g., Plan de Empleo, Nro Orden)")
     reason = forms.CharField(widget=forms.Textarea(attrs={'rows': 2}), required=False, label="Motivo o Notas")
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        if user and not (user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()):
+            if user.unit:
+                # Filtrar grasas que tengan lotes disponibles en esta unidad
+                self.fields['grease_type'].queryset = self.fields['grease_type'].queryset.filter(
+                    batches__storage_location=user.unit.name,
+                    batches__status__in=['SERVICEABLE', 'NEAR_EXPIRATION'],
+                    batches__available_quantity__gt=0
+                ).distinct()
 
 class GreaseReferencePriceForm(forms.ModelForm):
     class Meta:

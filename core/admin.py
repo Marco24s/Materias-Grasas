@@ -11,7 +11,18 @@ from .models import (
     StockMovement
 )
 
-admin.site.register(CustomUser, UserAdmin)
+class CustomUserAdmin(UserAdmin):
+    model = CustomUser
+    list_display = ['username', 'email', 'unit', 'is_staff']
+    
+    fieldsets = UserAdmin.fieldsets + (
+        ('Asignación de Unidad', {'fields': ('unit',)}),
+    )
+    add_fieldsets = UserAdmin.add_fieldsets + (
+        ('Asignación de Unidad', {'fields': ('unit',)}),
+    )
+
+admin.site.register(CustomUser, CustomUserAdmin)
 
 @admin.register(Unit)
 class UnitAdmin(admin.ModelAdmin):

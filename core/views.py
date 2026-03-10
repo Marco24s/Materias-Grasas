@@ -1,6 +1,6 @@
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.messages.views import SuccessMessageMixin
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView, TemplateView, FormView
+from django.views.generic import ListView, CreateView, UpdateView, DeleteView, TemplateView, FormView, View
 from django.urls import reverse_lazy
 
 from django.contrib import messages
@@ -16,6 +16,13 @@ from .models import Unit, MeasurementUnit, AircraftModel, GreaseType, AircraftGr
 from .forms import UnitForm, MeasurementUnitForm, AircraftModelForm, GreaseTypeForm, AircraftGreaseForm, FlightPlanForm, GreaseBatchForm, ConsumeGreaseForm, GreaseReferencePriceForm, RetestBatchForm
 from .services import update_batch_statuses, consume_grease
 from django.db.models import ProtectedError
+
+class ActiveUserRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
+    def test_func(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return False
+        return user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists() or user.unit is not None
 
 class LogisticsRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
     def test_func(self):
@@ -35,17 +42,29 @@ def home(request):
     if request.user.is_authenticated:
         update_batch_statuses()
         
+        user = request.user
+        is_admin = user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()
+        user_unit_name = user.unit.name if getattr(user, 'unit', None) else None
+        
         # Alertas de Vencimiento
-        expiration_alerts = GreaseBatch.objects.filter(
+        expiration_qs = GreaseBatch.objects.filter(
             status__in=['NEAR_EXPIRATION', 'EXPIRED'],
             available_quantity__gt=0
-        ).order_by('expiration_date')
+        )
+        if not is_admin and user_unit_name:
+            expiration_qs = expiration_qs.filter(storage_location=user_unit_name)
+            
+        expiration_alerts = expiration_qs.order_by('expiration_date')
         
         # Alertas de Stock Mínimo (Previsión de Abastecimiento)
         grease_types = GreaseType.objects.all()
         forecast_dict = {}
         for gt in grease_types:
-            total_available = sum(b.available_quantity for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION']))
+            batches_qs = gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION'])
+            if not is_admin and user_unit_name:
+                batches_qs = batches_qs.filter(storage_location=user_unit_name)
+                
+            total_available = sum(b.available_quantity for b in batches_qs)
             
             if gt.nomenclatura not in forecast_dict:
                 forecast_dict[gt.nomenclatura] = {
@@ -323,7 +342,63 @@ class GreaseBatchListView(LoginRequiredMixin, ListView):
     def get_queryset(self):
         # Primero actualizamos los estados antes de mostrar
         update_batch_statuses()
-        return super().get_queryset()
+        qs = super().get_queryset().filter(is_archived=False)
+        
+        user = self.request.user
+        if user.is_authenticated and getattr(user, 'unit', None):
+            from django.db.models import Case, When, Value, IntegerField
+            qs = qs.annotate(
+                is_own_unit=Case(
+                    When(storage_location=user.unit.name, then=Value(0)),
+                    default=Value(1),
+                    output_field=IntegerField(),
+                )
+            ).order_by('is_own_unit', 'expiration_date')
+            return qs
+            
+        return qs.order_by('expiration_date')
+
+class ArchivedBatchListView(LoginRequiredMixin, ListView):
+    model = GreaseBatch
+    template_name = 'core/greasebatch_archived_list.html'
+    context_object_name = 'batches'
+    
+    def get_queryset(self):
+        qs = super().get_queryset().filter(is_archived=True)
+        user = self.request.user
+        if user.is_authenticated and getattr(user, 'unit', None):
+            from django.db.models import Case, When, Value, IntegerField
+            qs = qs.annotate(
+                is_own_unit=Case(
+                    When(storage_location=user.unit.name, then=Value(0)),
+                    default=Value(1),
+                    output_field=IntegerField(),
+                )
+            ).order_by('is_own_unit', '-manufacturing_date')
+            return qs
+            
+        return qs.order_by('-manufacturing_date')
+
+class ArchiveBatchView(ActiveUserRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        from django.shortcuts import get_object_or_404
+        batch = get_object_or_404(GreaseBatch, pk=pk)
+        
+        # Verify permissions
+        user = request.user
+        if not (user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()):
+            if user.unit and batch.storage_location != user.unit.name:
+                messages.error(request, "No tienes permiso para modificar lotes que no pertenecen a tu unidad.")
+                return redirect('batch_list')
+        
+        if batch.available_quantity > 0:
+            messages.error(request, "No se puede archivar un lote que todavía tiene stock disponible.")
+            return redirect('batch_list')
+            
+        batch.is_archived = True
+        batch.save()
+        messages.success(request, f"El lote {batch.batch_number} fue archivado exitosamente y movido al historial.")
+        return redirect('batch_list')
 
 class GreaseBatchDetailView(LoginRequiredMixin, ListView):
     # Usado para ver los movimientos de un lote específico
@@ -339,12 +414,17 @@ class GreaseBatchDetailView(LoginRequiredMixin, ListView):
         context['batch'] = GreaseBatch.objects.get(pk=self.kwargs['pk'])
         return context
 
-class GreaseBatchCreateView(LogisticsRequiredMixin, SuccessMessageMixin, CreateView):
+class GreaseBatchCreateView(ActiveUserRequiredMixin, SuccessMessageMixin, CreateView):
     model = GreaseBatch
     form_class = GreaseBatchForm
     template_name = 'core/form_base.html'
     success_url = reverse_lazy('batch_list')
-    extra_context = {'title': 'Registrar Ingreso de Lote'}
+    extra_context = {'title': 'Registrar Ingreso de Casamata'}
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
 
     @transaction.atomic
     def form_valid(self, form):
@@ -362,11 +442,16 @@ class GreaseBatchCreateView(LogisticsRequiredMixin, SuccessMessageMixin, CreateV
         )
         return response
 
-class ConsumeGreaseView(LogisticsRequiredMixin, FormView):
+class ConsumeGreaseView(ActiveUserRequiredMixin, FormView):
     template_name = 'core/form_base.html'
     form_class = ConsumeGreaseForm
     success_url = reverse_lazy('batch_list')
     extra_context = {'title': 'Registrar Consumo de Grasa'}
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
 
     def form_valid(self, form):
         grease_type = form.cleaned_data['grease_type']
@@ -374,14 +459,23 @@ class ConsumeGreaseView(LogisticsRequiredMixin, FormView):
         reference = form.cleaned_data['reference']
         reason = form.cleaned_data['reason']
         
+        user = self.request.user
+        location = None
+        
+        # Si el usuario no es staff/admin/logística, pero tiene una unidad, forzamos esa ubicación
+        if not (user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()):
+            if user.unit:
+                location = user.unit.name
+        
         try:
             update_batch_statuses() # Always good to ensure accurate expiration states before consuming
             consume_grease(
                 grease_type=grease_type,
                 quantity_to_consume=quantity,
-                user=self.request.user,
+                user=user,
                 reference=reference,
-                reason=reason
+                reason=reason,
+                location=location
             )
             messages.success(self.request, f"Se consumieron {quantity} kg/uds de '{grease_type.nomenclatura}' exitosamente.")
             return super().form_valid(form)
@@ -405,10 +499,55 @@ class GreaseBatchDeleteView(LogisticsRequiredMixin, DeleteView):
         messages.success(request, f"El lote {self.object.batch_number} fue eliminado exitosamente.")
         return super().post(request, *args, **kwargs)
 
-class RetestBatchView(LogisticsRequiredMixin, UpdateView):
+class StartRetestView(ActiveUserRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        from django.shortcuts import get_object_or_404
+        batch = get_object_or_404(GreaseBatch, pk=pk)
+        
+        # Verificar permisos de unidad
+        user = request.user
+        if not (user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()):
+            if user.unit and batch.storage_location != user.unit.name:
+                messages.error(request, "No tienes permiso para modificar lotes que no pertenecen a tu unidad.")
+                return redirect('batch_detail', pk=batch.pk)
+        
+        if batch.status not in ['EXPIRED', 'NEAR_EXPIRATION']:
+            messages.error(request, "Solo se pueden enviar a retesteo lotes vencidos o próximos a vencer.")
+            return redirect('batch_detail', pk=batch.pk)
+            
+        if not batch.can_be_retested:
+            messages.error(request, "Este lote no admite retesteo.")
+            return redirect('batch_detail', pk=batch.pk)
+            
+        with transaction.atomic():
+            batch.status = 'PENDING_RETEST'
+            batch.save()
+            
+            # Registrar el movimiento de que fue enviado a retesteo
+            StockMovement.objects.create(
+                batch=batch,
+                movement_type='RETEST',
+                quantity_changed=0,
+                user=request.user,
+                reason="Lote enviado a laboratorio para retesteo. Estado en espera de resultados."
+            )
+            
+        messages.success(request, f"El lote {batch.batch_number} fue marcado como 'Retesteando...'")
+        return redirect('batch_detail', pk=batch.pk)
+
+class RetestBatchView(ActiveUserRequiredMixin, UpdateView):
     model = GreaseBatch
     form_class = RetestBatchForm
     template_name = 'core/form_base.html'
+    
+    def dispatch(self, request, *args, **kwargs):
+        batch = self.get_object()
+        user = request.user
+        if not (user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()):
+            if user.unit and batch.storage_location != user.unit.name:
+                messages.error(request, "No tienes permiso para modificar lotes que no pertenecen a tu unidad.")
+                return redirect('batch_detail', pk=batch.pk)
+        return super().dispatch(request, *args, **kwargs)
     
     def get_success_url(self):
         return reverse_lazy('batch_detail', kwargs={'pk': self.object.pk})
@@ -437,6 +576,7 @@ class RetestBatchView(LogisticsRequiredMixin, UpdateView):
         
         self.object.expiration_date = new_expiration
         self.object.can_be_retested = can_be_retested
+        self.object.status = 'SERVICEABLE'
         
         # Calcular diferencia si el usuario modificó la disponibilidad por consumo de laboratorio
         old_quantity = form.initial.get('available_quantity', 0)
@@ -456,8 +596,6 @@ class RetestBatchView(LogisticsRequiredMixin, UpdateView):
         
         # update batch status based on new expiration
         update_batch_statuses()
-        
-        self.object.save()
         
         messages.success(self.request, "Retesteo registrado y lote actualizado exitosamente.")
         return response
@@ -518,10 +656,12 @@ class ProcurementForecastingView(LoginRequiredMixin, TemplateView):
 def export_grease_batches_csv(request):
     update_batch_statuses()
     response = HttpResponse(content_type='text/csv; charset=utf-8')
-    response['Content-Disposition'] = 'attachment; filename="stock_lotes.csv"'
+    response['Content-Disposition'] = 'attachment; filename="stock_casamatas.csv"'
     
-    writer = csv.writer(response)
-    writer.writerow(['Tipo de Grasa', 'Lote', 'Vencimiento', 'Estado', 'Ubicación', 'Cantidad Inicial', 'Cantidad Disponible'])
+    # Add BOM for UTF-8 so Excel recognizes special characters correctly
+    response.write('\ufeff')
+    writer = csv.writer(response, dialect='excel', delimiter=';')
+    writer.writerow(['Tipo de Grasa', 'Casamata', 'Vencimiento', 'Estado', 'Ubicación', 'Cantidad Inicial', 'Cantidad Disponible'])
     
     batches = GreaseBatch.objects.all().order_by('expiration_date')
     for b in batches:
@@ -542,7 +682,9 @@ def export_procurement_forecast_csv(request):
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = 'attachment; filename="pronostico_abastecimiento.csv"'
     
-    writer = csv.writer(response)
+    # Add BOM for UTF-8
+    response.write('\ufeff')
+    writer = csv.writer(response, dialect='excel', delimiter=';')
     writer.writerow(['Tipo de Grasa', 'Stock Disponible', 'Consumo Proyectado', 'Diferencia (Sobrante/Faltante)', 'Compra Recomendada'])
     
     forecast_dict = {}
@@ -591,10 +733,10 @@ def export_grease_batches_pdf(request):
     elements = []
     
     styles = getSampleStyleSheet()
-    elements.append(Paragraph("Reporte de Stock de Lotes de Grasa", styles['Title']))
+    elements.append(Paragraph("Reporte de Stock de Casamatas", styles['Title']))
     elements.append(Spacer(1, 12))
     
-    data = [['Tipo de Grasa', 'Lote', 'Vencimiento', 'Estado', 'Ubicación', 'Inicial', 'Disponible']]
+    data = [['Tipo de Grasa', 'Casamata', 'Vencimiento', 'Estado', 'Ubicación', 'Inicial', 'Disponible']]
     for b in GreaseBatch.objects.all().order_by('expiration_date'):
         data.append([
             b.grease_type.nomenclatura,
@@ -622,7 +764,7 @@ def export_grease_batches_pdf(request):
     
     buffer.seek(0)
     response = HttpResponse(buffer, content_type='application/pdf')
-    response['Content-Disposition'] = 'attachment; filename="stock_lotes.pdf"'
+    response['Content-Disposition'] = 'attachment; filename="stock_casamatas.pdf"'
     return response
 
 @login_required

@@ -3,9 +3,15 @@ from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 
 class CustomUser(AbstractUser):
-    # En proyectos institucionales, un CustomUser desde el principio es la mejor práctica
-    # Añadiremos campos extra más adelante si el cliente lo requiere (ej. Rango, Destino, etc)
-    pass
+    unit = models.ForeignKey(
+        'Unit', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='users',
+        verbose_name="Unidad / Escuadrilla Asignada",
+        help_text="Asignar una unidad para restringir al usuario a consumos únicamente de esta ubicación."
+    )
 
 class Unit(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="Nombre de la Unidad")
@@ -133,7 +139,7 @@ class GreaseBatch(models.Model):
         ('SERVICEABLE', 'Retesteable'),
         ('NEAR_EXPIRATION', 'Próximo a Vencer'),
         ('EXPIRED', 'Vencido'),
-        ('PENDING_RECERTIFICATION', 'Pendiente Re-certificación'),
+        ('PENDING_RETEST', 'Retesteando...'),
     ]
 
     grease_type = models.ForeignKey(GreaseType, on_delete=models.CASCADE, related_name="batches", verbose_name="Tipo de Grasa")
@@ -146,14 +152,15 @@ class GreaseBatch(models.Model):
     storage_location = models.CharField(max_length=100, verbose_name="Ubicación (Almacén/Unidad)")
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='SERVICEABLE', verbose_name="Estado")
     can_be_retested = models.BooleanField(default=True, verbose_name="¿Admite retesteo futuro?", help_text="Indica si este lote puede ser sometido a un nuevo retesteo cuando venza.")
+    is_archived = models.BooleanField(default=False, verbose_name="¿Archivado (Historial)?")
 
     class Meta:
-        verbose_name = "Lote de Grasa"
-        verbose_name_plural = "Lotes de Grasas"
+        verbose_name = "Casamata"
+        verbose_name_plural = "Casamatas"
         unique_together = ('grease_type', 'batch_number')
 
     def __str__(self):
-        return f"Lote {self.batch_number} - {self.grease_type.nomenclatura}"
+        return f"Casamata {self.batch_number} - {self.grease_type.nomenclatura}"
         
     def clean(self):
         if self.available_quantity is not None and self.initial_quantity is not None:
