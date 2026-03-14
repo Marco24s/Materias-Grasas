@@ -12,12 +12,14 @@ def smart_number(value):
     try:
         if isinstance(value, Decimal):
             d = value.normalize()
-            return int(d) if d == d.to_integral() else d
+            if d == d.to_integral():
+                return int(d)
+            return round(d, 1)
             
         f_val = float(value)
         if f_val.is_integer():
             return int(f_val)
-        return f_val
+        return round(f_val, 1)
     except (ValueError, TypeError):
         return value
 

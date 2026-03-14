@@ -12,8 +12,8 @@ from django.core.exceptions import ValidationError
 import csv
 from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
-from .models import Unit, MeasurementUnit, AircraftModel, GreaseType, AircraftGrease, FlightPlan, GreaseBatch, StockMovement, GreaseReferencePrice
-from .forms import UnitForm, MeasurementUnitForm, AircraftModelForm, GreaseTypeForm, AircraftGreaseForm, FlightPlanForm, GreaseBatchForm, ConsumeGreaseForm, GreaseReferencePriceForm, RetestBatchForm
+from .models import Unit, MeasurementUnit, AircraftModel, GreaseType, AircraftGrease, FlightPlan, GreaseBatch, StockMovement, GreaseReferencePrice, ProcurementRequirement
+from .forms import UnitForm, MeasurementUnitForm, AircraftModelForm, GreaseTypeForm, AircraftGreaseForm, FlightPlanForm, GreaseBatchForm, ConsumeGreaseForm, GreaseReferencePriceForm, RetestBatchForm, ProcurementRequirementForm
 from .services import update_batch_statuses, consume_grease
 from django.db.models import ProtectedError
 
@@ -51,8 +51,11 @@ def home(request):
             status__in=['NEAR_EXPIRATION', 'EXPIRED'],
             available_quantity__gt=0
         )
-        if not is_admin and user_unit_name:
-            expiration_qs = expiration_qs.filter(storage_location=user_unit_name)
+        if not is_admin:
+            if user_unit_name:
+                expiration_qs = expiration_qs.filter(storage_location=user_unit_name)
+            else:
+                expiration_qs = expiration_qs.none()
             
         expiration_alerts = expiration_qs.order_by('expiration_date')
         
@@ -61,8 +64,11 @@ def home(request):
         forecast_dict = {}
         for gt in grease_types:
             batches_qs = gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION'])
-            if not is_admin and user_unit_name:
-                batches_qs = batches_qs.filter(storage_location=user_unit_name)
+            if not is_admin:
+                if user_unit_name:
+                    batches_qs = batches_qs.filter(storage_location=user_unit_name)
+                else:
+                    batches_qs = batches_qs.none() # User without a unit shouldn't see stock from anywhere unless admin
                 
             total_available = sum(b.available_quantity for b in batches_qs)
             
@@ -78,12 +84,25 @@ def home(request):
             forecast_dict[gt.nomenclatura]['minimum_stock'] += gt.minimum_stock
             
             for assoc in gt.aircraft_associations.all():
+                if not is_admin:
+                    if user_unit_name and assoc.aircraft_model.unit.name == user_unit_name:
+                        pass
+                    else:
+                        continue
+                        
                 for plan in assoc.aircraft_model.flight_plans.all():
                     proj = assoc.hourly_consumption_rate * plan.planned_hours
                     forecast_dict[gt.nomenclatura]['plan_details_map'][(assoc.aircraft_model.id, plan.id)] = proj
                     
         for nom, data in forecast_dict.items():
             total_projected = sum(data['plan_details_map'].values())
+            
+            # Solo mostrar alerta si el usuario (o admin) al menos está proyectando un consumo o tiene stock de esta grasa
+            if not is_admin and user_unit_name:
+                has_involvement = total_projected > 0 or data['available'] > 0
+                if not has_involvement:
+                    continue
+                    
             if total_projected > data['available']:
                 stock_alerts.append({
                     'grease_type': data['grease_type'],
@@ -520,17 +539,24 @@ class StartRetestView(ActiveUserRequiredMixin, View):
             return redirect('batch_detail', pk=batch.pk)
             
         with transaction.atomic():
-            batch.status = 'PENDING_RETEST'
-            batch.save()
-            
-            # Registrar el movimiento de que fue enviado a retesteo
-            StockMovement.objects.create(
-                batch=batch,
-                movement_type='RETEST',
-                quantity_changed=0,
-                user=request.user,
-                reason="Lote enviado a laboratorio para retesteo. Estado en espera de resultados."
+            matching_batches = GreaseBatch.objects.filter(
+                batch_number=batch.batch_number,
+                grease_type=batch.grease_type,
+                status__in=['EXPIRED', 'NEAR_EXPIRATION']
             )
+            
+            for matched_batch in matching_batches:
+                matched_batch.status = 'PENDING_RETEST'
+                matched_batch.save()
+                
+                # Registrar el movimiento de que fue enviado a retesteo
+                StockMovement.objects.create(
+                    batch=matched_batch,
+                    movement_type='RETEST',
+                    quantity_changed=0,
+                    user=request.user,
+                    reason="Casamata enviada a laboratorio para retesteo. Estado en espera de resultados."
+                )
             
         messages.success(request, f"El lote {batch.batch_number} fue marcado como 'Retesteando...'")
         return redirect('batch_detail', pk=batch.pk)
@@ -585,7 +611,7 @@ class RetestBatchView(ActiveUserRequiredMixin, UpdateView):
 
         response = super().form_valid(form)
         
-        # registrar movimiento
+        # Original batch movement (which includes potential quantity deductions for lab sample)
         StockMovement.objects.create(
             batch=self.object,
             movement_type='RETEST',
@@ -593,6 +619,27 @@ class RetestBatchView(ActiveUserRequiredMixin, UpdateView):
             user=self.request.user,
             reason=f"Retesteo / Extensión de Vencimiento. Años Habilitados: {extension_years} ({months_to_add} meses). {reason}"
         )
+        
+        # Sincronizar retesteo de las mismas casamatas en otras unidades
+        matching_batches = GreaseBatch.objects.filter(
+            batch_number=self.object.batch_number,
+            grease_type=self.object.grease_type,
+            status='PENDING_RETEST'
+        ).exclude(pk=self.object.pk)
+        
+        for matched_batch in matching_batches:
+            matched_batch.expiration_date = new_expiration
+            matched_batch.can_be_retested = can_be_retested
+            matched_batch.status = 'SERVICEABLE'
+            matched_batch.save()
+            
+            StockMovement.objects.create(
+                batch=matched_batch,
+                movement_type='RETEST',
+                quantity_changed=0, 
+                user=self.request.user,
+                reason=f"Retesteo / Extensión sincronizada desde otra dependencia. Años Habilitados: {extension_years} ({months_to_add} meses)."
+            )
         
         # update batch status based on new expiration
         update_batch_statuses()
@@ -606,49 +653,13 @@ class ProcurementForecastingView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        grease_types = GreaseType.objects.all()
-        forecast_dict = {}
-
+        from .services import get_procurement_forecast
+        from .services import update_batch_statuses
+        
         update_batch_statuses()
-
-        for gt in grease_types:
-            total_available = sum(b.available_quantity for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION']))
-            
-            if gt.nomenclatura not in forecast_dict:
-                forecast_dict[gt.nomenclatura] = {
-                    'grease_type': gt,
-                    'total_available': 0,
-                    'plan_details_map': {}
-                }
-                
-            forecast_dict[gt.nomenclatura]['total_available'] += total_available
-            
-            for assoc in gt.aircraft_associations.all():
-                for plan in assoc.aircraft_model.flight_plans.all():
-                    projected_for_plan = assoc.hourly_consumption_rate * plan.planned_hours
-                    plan_key = (assoc.aircraft_model.id, plan.id)
-                    # Deduplicamos por avión y plan para evitar doble conteo si
-                    # múltiples presentaciones se asocian al mismo avión.
-                    if plan_key not in forecast_dict[gt.nomenclatura]['plan_details_map']:
-                        forecast_dict[gt.nomenclatura]['plan_details_map'][plan_key] = {
-                            'aircraft': assoc.aircraft_model,
-                            'plan': plan,
-                            'rate': assoc.hourly_consumption_rate,
-                            'projected': projected_for_plan
-                        }
-            
-        forecast_data = []
-        for nom, data in forecast_dict.items():
-            data['plan_details'] = list(data['plan_details_map'].values())
-            data['total_projected'] = sum(p['projected'] for p in data['plan_details'])
-            
-            shortfall = data['total_projected'] - data['total_available']
-            data['shortfall'] = shortfall if shortfall > 0 else 0
-            data['recommended_purchase'] = data['shortfall']
-            
-            forecast_data.append(data)
-            
+        forecast_data = get_procurement_forecast()
         context['forecast_data'] = forecast_data
+        
         return context
 
 # --- CSV Exports ---
@@ -687,33 +698,17 @@ def export_procurement_forecast_csv(request):
     writer = csv.writer(response, dialect='excel', delimiter=';')
     writer.writerow(['Tipo de Grasa', 'Stock Disponible', 'Consumo Proyectado', 'Diferencia (Sobrante/Faltante)', 'Compra Recomendada'])
     
-    forecast_dict = {}
-    for gt in GreaseType.objects.all():
-        total_available = sum(b.available_quantity for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION']))
-        
-        if gt.nomenclatura not in forecast_dict:
-            forecast_dict[gt.nomenclatura] = {
-                'available': 0,
-                'plan_details_map': {}
-            }
-            
-        forecast_dict[gt.nomenclatura]['available'] += total_available
-        
-        for assoc in gt.aircraft_associations.all():
-            for plan in assoc.aircraft_model.flight_plans.all():
-                proj = assoc.hourly_consumption_rate * plan.planned_hours
-                forecast_dict[gt.nomenclatura]['plan_details_map'][(assoc.aircraft_model.id, plan.id)] = proj
-                
-    for nom, data in forecast_dict.items():
-        total_projected = sum(data['plan_details_map'].values())
-        shortfall = total_projected - data['available']
-        recommended_purchase = shortfall if shortfall > 0 else 0
+    from .services import get_procurement_forecast
+    forecast_data = get_procurement_forecast()
+    
+    for row in forecast_data:
+        recommended_purchase = row['shortfall'] if row['shortfall'] > 0 else 0
         
         writer.writerow([
-            nom,
-            data['available'],
-            total_projected,
-            shortfall,
+            row['grease_type'].nomenclatura,
+            row['total_available'],
+            row['total_projected'],
+            row['shortfall'],
             recommended_purchase
         ])
     return response
@@ -829,3 +824,68 @@ def export_procurement_forecast_pdf(request):
     response['Content-Disposition'] = 'attachment; filename="pronostico_abastecimiento.pdf"'
     return response
 
+# --- Procurement Requirements ---
+class ProcurementRequirementListView(LogisticsRequiredMixin, ListView):
+    model = ProcurementRequirement
+    template_name = 'core/procurementrequirement_list.html'
+    context_object_name = 'requirements'
+    
+class CreateRequirementFromForecastView(LogisticsRequiredMixin, View):
+    def post(self, request, grease_type_id, *args, **kwargs):
+        from django.shortcuts import get_object_or_404
+        gt = get_object_or_404(GreaseType, pk=grease_type_id)
+        quantity = request.POST.get('requested_quantity', 0)
+        
+        # Check if already exists an active req
+        active_req = ProcurementRequirement.objects.filter(grease_type=gt, status__in=['PENDING', 'ORDERED']).exists()
+        if active_req:
+            messages.warning(request, f"Ya existe un requerimiento activo para {gt.nomenclatura}.")
+        else:
+            ProcurementRequirement.objects.create(
+                grease_type=gt,
+                requested_quantity=quantity,
+                requested_by=request.user,
+                status='PENDING'
+            )
+            messages.success(request, f"Requerimiento de compra iniciado para {gt.nomenclatura}.")
+            
+        return redirect('procurement_forecast')
+
+class ProcurementRequirementUpdateView(LogisticsRequiredMixin, SuccessMessageMixin, UpdateView):
+    model = ProcurementRequirement
+    form_class = ProcurementRequirementForm
+    template_name = 'core/form_base.html'
+    success_url = reverse_lazy('requirement_list')
+    success_message = "Requerimiento actualizado exitosamente."
+    extra_context = {'title': 'Editar Requerimiento de Adquisición'}
+
+@login_required
+def export_requirements_csv(request):
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="requerimientos_compra.csv"'
+
+    # BOM para que Excel reconozca correctamente los caracteres especiales
+    response.write('\ufeff')
+    writer = csv.writer(response, dialect='excel', delimiter=';')
+    writer.writerow(['ID Req.', 'Fecha de Solicitud', 'Grasa (Nomenclatura)', 'Presentación', 'Cantidad Solicitada', 'Estado', 'Solicitado Por', 'Notas'])
+
+    STATUS_LABELS = {
+        'PENDING': 'Pendiente',
+        'ORDERED': 'En Compra',
+        'DELIVERED': 'Completado',
+        'CANCELLED': 'Cancelado',
+    }
+
+    requirements = ProcurementRequirement.objects.all().order_by('-request_date')
+    for req in requirements:
+        writer.writerow([
+            f'#{req.id}',
+            req.request_date.strftime('%d/%m/%Y %H:%M'),
+            req.grease_type.nomenclatura,
+            str(req.grease_type.unidad) if req.grease_type.unidad else '',
+            req.requested_quantity,
+            STATUS_LABELS.get(req.status, req.status),
+            req.requested_by.username if req.requested_by else '-',
+            getattr(req, 'notes', '') or '',
+        ])
+    return response

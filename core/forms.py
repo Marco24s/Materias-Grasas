@@ -1,5 +1,5 @@
 from django import forms
-from .models import Unit, MeasurementUnit, AircraftModel, GreaseType, AircraftGrease, FlightPlan, GreaseBatch, GreaseReferencePrice
+from .models import Unit, MeasurementUnit, AircraftModel, GreaseType, AircraftGrease, FlightPlan, GreaseBatch, GreaseReferencePrice, ProcurementRequirement
 
 class UnitForm(forms.ModelForm):
     class Meta:
@@ -207,4 +207,9 @@ class RetestBatchForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['available_quantity'].help_text = "Ajustar si la muestra para laboratorio consumió material."
+
+class ProcurementRequirementForm(forms.ModelForm):
+    class Meta:
+        model = ProcurementRequirement
+        fields = ['status', 'requested_quantity', 'notes']
 

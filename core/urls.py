@@ -58,6 +58,12 @@ urlpatterns = [
     path('procurement/export/', views.export_procurement_forecast_csv, name='export_procurement_forecast_csv'),
     path('procurement/export/pdf/', views.export_procurement_forecast_pdf, name='export_procurement_forecast_pdf'),
     
+    # Procurement Requirements
+    path('procurement/requirements/', views.ProcurementRequirementListView.as_view(), name='requirement_list'),
+    path('procurement/requirements/add/<int:grease_type_id>/', views.CreateRequirementFromForecastView.as_view(), name='requirement_create_from_forecast'),
+    path('procurement/requirements/<int:pk>/edit/', views.ProcurementRequirementUpdateView.as_view(), name='requirement_update'),
+    path('procurement/requirements/export/', views.export_requirements_csv, name='export_requirements_csv'),
+    
     # Exports
     path('stock/export/', views.export_grease_batches_csv, name='export_grease_batches_csv'),
     path('stock/export/pdf/', views.export_grease_batches_pdf, name='export_grease_batches_pdf'),

@@ -30,29 +30,32 @@
                 <ul class="navbar-nav me-auto">
                     <!-- Nav links here -->
                     <li class="nav-item">
-                        <a class="nav-link" href="/">Inicio</a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active fw-bold text-white border-bottom border-2 border-white pb-1{% endif %}" href="{% url 'home' %}">Inicio</a>
                     </li>
                     {% if user.is_authenticated %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'unit_list' %}">Unidades</a>
+                        <a class="nav-link {% if 'unit' in request.resolver_match.url_name and 'measurementunit' not in request.resolver_match.url_name %}active fw-bold text-white border-bottom border-2 border-white pb-1{% endif %}" href="{% url 'unit_list' %}">Unidades</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'aircraft_list' %}">Aeronaves</a>
+                        <a class="nav-link {% if 'aircraft' in request.resolver_match.url_name %}active fw-bold text-white border-bottom border-2 border-white pb-1{% endif %}" href="{% url 'aircraft_list' %}">Aeronaves</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'grease_list' %}">Catálogo Grasas</a>
+                        <a class="nav-link {% if 'grease' in request.resolver_match.url_name and 'batch' not in request.resolver_match.url_name %}active fw-bold text-white border-bottom border-2 border-white pb-1{% endif %}" href="{% url 'grease_list' %}">Catálogo Grasas</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'association_list' %}">Factores de Planeo</a>
+                        <a class="nav-link {% if 'association' in request.resolver_match.url_name %}active fw-bold text-white border-bottom border-2 border-white pb-1{% endif %}" href="{% url 'association_list' %}">Factores de Planeo</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'flightplan_list' %}">Planes de Empleo</a>
+                        <a class="nav-link {% if 'flightplan' in request.resolver_match.url_name %}active fw-bold text-white border-bottom border-2 border-white pb-1{% endif %}" href="{% url 'flightplan_list' %}">Planes de Empleo</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'batch_list' %}">Stock / Lotes</a>
+                        <a class="nav-link {% if 'batch' in request.resolver_match.url_name or 'consume_grease' in request.resolver_match.url_name %}active fw-bold text-white border-bottom border-2 border-white pb-1{% endif %}" href="{% url 'batch_list' %}">Stock / Lotes</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'procurement_forecast' %}">Abastecimiento</a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'procurement_forecast' %}active fw-bold text-white border-bottom border-2 border-white pb-1{% endif %}" href="{% url 'procurement_forecast' %}">Abastecimiento</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'requirement' in request.resolver_match.url_name %}active fw-bold text-white border-bottom border-2 border-white pb-1{% endif %}" href="{% url 'requirement_list' %}">Requerimientos de Compra</a>
                     </li>
                     {% endif %}
                 </ul>

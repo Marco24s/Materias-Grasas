@@ -157,7 +157,7 @@ class GreaseBatch(models.Model):
     class Meta:
         verbose_name = "Casamata"
         verbose_name_plural = "Casamatas"
-        unique_together = ('grease_type', 'batch_number')
+        unique_together = ('grease_type', 'batch_number', 'storage_location')
 
     def __str__(self):
         return f"Casamata {self.batch_number} - {self.grease_type.nomenclatura}"
@@ -218,3 +218,25 @@ class GreaseReferencePrice(models.Model):
         if self.presentation_quantity and self.presentation_quantity > 0:
             return self.price / self.presentation_quantity
         return None
+
+class ProcurementRequirement(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'Pendiente de Compra'),
+        ('ORDERED', 'En proceso de Compra'),
+        ('DELIVERED', 'Recibido / Completado'),
+        ('CANCELLED', 'Cancelado'),
+    ]
+    grease_type = models.ForeignKey(GreaseType, on_delete=models.CASCADE, related_name="requirements", verbose_name="Tipo de Grasa")
+    requested_quantity = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Cantidad Requerida")
+    request_date = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Solicitud")
+    requested_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, verbose_name="Solicitado Por")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', verbose_name="Estado")
+    notes = models.TextField(blank=True, null=True, verbose_name="Observaciones")
+
+    class Meta:
+        verbose_name = "Requerimiento de Adquisición"
+        verbose_name_plural = "Requerimientos de Adquisición"
+        ordering = ['-request_date']
+
+    def __str__(self):
+        return f"Req {self.id} - {self.grease_type.nomenclatura} ({self.get_status_display()})"

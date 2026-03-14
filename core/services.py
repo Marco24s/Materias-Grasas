@@ -85,3 +85,108 @@ def consume_grease(grease_type, quantity_to_consume, user, reference="", reason=
         )
 
     return True
+
+def get_procurement_forecast():
+    """
+    Calculates the procurement forecast using a daily fractional simulation.
+    Returns a list of dictionaries, one per GreaseType, containing:
+    - grease_type
+    - total_available
+    - total_projected
+    - shortfall (amount missing taking into account expirations over time)
+    - plan_details (list of active plans contributing to consumption)
+    """
+    from datetime import date, timedelta
+    from .models import GreaseType
+    
+    forecast_data = []
+    today = date.today()
+    
+    for gt in GreaseType.objects.all():
+        total_available = sum(b.available_quantity for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION']))
+        
+        active_req = gt.requirements.filter(status__in=['PENDING', 'ORDERED']).first()
+        
+        fg = {
+            'grease_type': gt,
+            'total_available': float(total_available),
+            'total_projected': 0.0,
+            'shortfall': 0.0,
+            'plan_details': [],
+            'active_requirement': active_req,
+        }
+        
+        # Gather all plans and daily rates
+        plans_to_simulate = []
+        for assoc in gt.aircraft_associations.all():
+            for plan in assoc.aircraft_model.flight_plans.all():
+                if not plan.period_start_date or not plan.period_end_date:
+                    continue
+                
+                total_days = (plan.period_end_date - plan.period_start_date).days + 1
+                if total_days <= 0: continue
+                
+                total_consumption = float(assoc.hourly_consumption_rate * plan.planned_hours)
+                daily_consumption = total_consumption / total_days
+                
+                plans_to_simulate.append({
+                    'start': plan.period_start_date,
+                    'end': plan.period_end_date,
+                    'daily_rate': daily_consumption
+                })
+                
+                fg['plan_details'].append({
+                    'aircraft': assoc.aircraft_model,
+                    'plan': plan,
+                    'rate': assoc.hourly_consumption_rate,
+                    'projected': total_consumption
+                })
+                fg['total_projected'] += total_consumption
+        
+        if not plans_to_simulate:
+            forecast_data.append(fg)
+            continue
+            
+        # Time horizon for simulation
+        end_date = max(p['end'] for p in plans_to_simulate)
+        start_date = min(p['start'] for p in plans_to_simulate)
+
+        # Load batches for simulation (sorted by expiration so we consume oldest first)
+        active_batches = []
+        for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION']).order_by('expiration_date'):
+            active_batches.append({
+                'qty': float(b.available_quantity),
+                'exp': b.expiration_date
+            })
+            
+        sim_shortfall = 0.0
+        current_date = start_date
+        
+        while current_date <= end_date:
+            # Expire batches whose expiration date has STRICTLY passed (if exp == current_date, it's still good today)
+            active_batches = [b for b in active_batches if b['exp'] >= current_date]
+            
+            # Sum up daily demand from overlapping plans
+            todays_demand = sum(p['daily_rate'] for p in plans_to_simulate if p['start'] <= current_date <= p['end'])
+            
+            if todays_demand > 0:
+                remaining_demand = todays_demand
+                for b in active_batches:
+                    if remaining_demand <= 0:
+                        break
+                    if b['qty'] >= remaining_demand:
+                        b['qty'] -= remaining_demand
+                        remaining_demand = 0
+                    else:
+                        remaining_demand -= b['qty']
+                        b['qty'] = 0
+                
+                if remaining_demand > 0:
+                    sim_shortfall += remaining_demand
+            
+            current_date += timedelta(days=1)
+            
+        fg['shortfall'] = sim_shortfall
+        forecast_data.append(fg)
+        
+    return forecast_data

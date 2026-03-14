@@ -42,12 +42,21 @@
                         </span>
                     </td>
                     <td>
-                        {% if row.shortfall > 0 %}
-                            <a href="#" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-cart-plus"></i> Iniciar Adquisición</a>
+                        {% if row.active_requirement %}
+                            <span class="badge bg-secondary p-2"><i class="fa-solid fa-clock"></i> Cargado para compra</span>
+                            <br><small class="text-muted">Req. #{{ row.active_requirement.id }} ({{ row.active_requirement.get_status_display }})</small>
+                        {% elif row.shortfall > 0 %}
+                            <form method="post" action="{% url 'requirement_create_from_forecast' row.grease_type.id %}" class="m-0 p-0">
+                                {% csrf_token %}
+                                <input type="hidden" name="requested_quantity" value="{{ row.shortfall|stringformat:'.2f' }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Se prevee que faltará stock por consumo o vencimientos de las casamatas actuales"><i class="fa-solid fa-cart-plus"></i> Iniciar Adquisición</button>
+                            </form>
+                        {% elif not row.plan_details %}
+                            <span class="text-muted"><i class="fa-solid fa-ban"></i> Sin Consumo Previsto</span>
                         {% elif row.total_available <= 0 %}
-                            <span class="text-muted"><i class="fa-solid fa-box-open"></i> Sin Stock</span>
+                            <span class="text-muted"><i class="fa-solid fa-box-open"></i> Sin Stock y Sin Demanda</span>
                         {% else %}
-                            <span class="text-success"><i class="fa-solid fa-check"></i> Stock Suficiente</span>
+                            <span class="text-success" title="El stock actual llega al final de los planes de empleo sin vencerse ni agotarse"><i class="fa-solid fa-check-double"></i> Cobertura Asegurada</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -62,10 +71,10 @@
 </div>
 
 <div class="alert alert-info mt-4 pb-0">
-    <h5><i class="fa-solid fa-circle-info me-2"></i> Notas sobre la previsión</h5>
+    <h5><i class="fa-solid fa-circle-info me-2"></i> Simulador Predictivo de Abastecimiento</h5>
     <ul>
-        <li>El <strong>Consumo Proyectado</strong> se calcula analizando todos los "Planes de Empleo" cargados en el sistema y multiplicando las "Horas Planificadas" por la "Tasa de Consumo por Hora" de cada aeronave asociada a la grasa.</li>
-        <li>Si la <strong>Diferencia</strong> es negativa (rojo), significa que el stock actual no alcanzará para cumplir los planes de empleo previstos.</li>
+        <li>El <strong>Consumo Proyectado</strong> es la suma total del requerimiento de la grasa según los Factores de Planeo correspondientes.</li>
+        <li>La <strong>Diferencia</strong> se determina de forma inteligente simulando el paso del tiempo día a día: a medida que transcurren los meses del plan, se consume virtualmente la grasa, pero las casamatas se "tiran" (dejan de estar disponibles) el día en que se vencen. Si el sistema detecta que la grasa se vencerá antes de que se termine el plan de empleo, marcará la cantidad en rojo y requerirá iniciar el abastecimiento o en su defecto una extensión de laboratorio para evitar falta de material en la línea.</li>
     </ul>
 </div>
 
