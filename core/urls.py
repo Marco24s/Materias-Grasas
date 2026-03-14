@@ -53,6 +53,9 @@ urlpatterns = [
     path('stock/<int:pk>/retest/', views.RetestBatchView.as_view(), name='batch_retest'),
     path('stock/consume/', views.ConsumeGreaseView.as_view(), name='consume_grease'),
     
+    # Flight Hours Calculator
+    path('tools/flight-hours/', views.FlightHoursCalculatorView.as_view(), name='flight_hours_calculator'),
+
     # Procurement Forecasting
     path('procurement/', views.ProcurementForecastingView.as_view(), name='procurement_forecast'),
     path('procurement/export/', views.export_procurement_forecast_csv, name='export_procurement_forecast_csv'),
@@ -62,6 +65,7 @@ urlpatterns = [
     path('procurement/requirements/', views.ProcurementRequirementListView.as_view(), name='requirement_list'),
     path('procurement/requirements/add/<int:grease_type_id>/', views.CreateRequirementFromForecastView.as_view(), name='requirement_create_from_forecast'),
     path('procurement/requirements/<int:pk>/edit/', views.ProcurementRequirementUpdateView.as_view(), name='requirement_update'),
+    path('procurement/requirements/<int:pk>/delete/', views.ProcurementRequirementDeleteView.as_view(), name='requirement_delete'),
     path('procurement/requirements/export/', views.export_requirements_csv, name='export_requirements_csv'),
     
     # Exports

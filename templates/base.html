@@ -86,7 +86,9 @@
                             <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="configDropdown">
                                 <li><h6 class="dropdown-header">Diccionarios del Sistema</h6></li>
                                 <li><a class="dropdown-item" href="{% url 'measurementunit_list' %}"><i class="fa-solid fa-scale-balanced me-2"></i>Unidades de Medida</a></li>
-                                <!-- More config entries can go here in the future -->
+                                <li><hr class="dropdown-divider"></li>
+                                <li><h6 class="dropdown-header">Herramientas</h6></li>
+                                <li><a class="dropdown-item {% if request.resolver_match.url_name == 'flight_hours_calculator' %}active{% endif %}" href="{% url 'flight_hours_calculator' %}"><i class="fa-solid fa-calculator me-2"></i>Calculadora de Horas de Vuelo</a></li>
                             </ul>
                         </li>
                         {% endif %}

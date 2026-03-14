@@ -75,7 +75,11 @@
                                 Faltante: {{ alert.shortfall|smart_number }} {{ alert.grease_type.unidad }}
                             </span>
                             <br>
-                            <a href="{% url 'procurement_forecast' %}" class="btn btn-sm btn-outline-danger">Adquirir</a>
+                            {% if alert.active_requirement %}
+                                <span class="badge bg-secondary p-2"><i class="fa-solid fa-clock"></i> Cargado para compra</span>
+                            {% else %}
+                                <a href="{% url 'procurement_forecast' %}" class="btn btn-sm btn-outline-danger">Adquirir</a>
+                            {% endif %}
                         </div>
                     </div>
                     {% endfor %}
@@ -107,7 +111,11 @@
                                 Comprar: {{ alert.shortfall|abs_val|smart_number }} {{ alert.grease_type.unidad }}
                             </span>
                             <br>
-                            <a href="{% url 'procurement_forecast' %}" class="btn btn-sm btn-outline-danger">Adquirir</a>
+                            {% if alert.active_requirement %}
+                                <span class="badge bg-secondary p-2"><i class="fa-solid fa-clock"></i> Cargado para compra</span>
+                            {% else %}
+                                <a href="{% url 'procurement_forecast' %}" class="btn btn-sm btn-outline-danger">Adquirir</a>
+                            {% endif %}
                         </div>
                     </div>
                     {% endfor %}

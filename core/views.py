@@ -104,20 +104,30 @@ def home(request):
                     continue
                     
             if total_projected > data['available']:
+                active_req = ProcurementRequirement.objects.filter(
+                    grease_type__nomenclatura=nom,
+                    status__in=['PENDING', 'ORDERED']
+                ).first()
                 stock_alerts.append({
                     'grease_type': data['grease_type'],
                     'shortfall': total_projected - data['available'],
                     'available': data['available'],
-                    'projected': total_projected
+                    'projected': total_projected,
+                    'active_requirement': active_req,
                 })
                 
             # Alertas de Stock Crítico (por debajo del Stock Mínimo)
             if data['available'] < data['minimum_stock']:
+                active_req_critical = ProcurementRequirement.objects.filter(
+                    grease_type__nomenclatura=nom,
+                    status__in=['PENDING', 'ORDERED']
+                ).first()
                 critical_stock_alerts.append({
                     'grease_type': data['grease_type'],
                     'available': data['available'],
                     'minimum_stock': data['minimum_stock'],
-                    'shortfall': data['minimum_stock'] - data['available']
+                    'shortfall': data['minimum_stock'] - data['available'],
+                    'active_requirement': active_req_critical,
                 })
                 
     return render(request, 'core/home.html', {
@@ -662,6 +672,124 @@ class ProcurementForecastingView(LoginRequiredMixin, TemplateView):
         
         return context
 
+# --- Flight Hours Calculator ---
+class FlightHoursCalculatorView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/flight_hours_calculator.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['aircrafts'] = AircraftModel.objects.all().order_by('name')
+        # SQLite-compatible: get one GreaseType per unique nomenclatura
+        from django.db.models import Min
+        unique_ids = GreaseType.objects.values('nomenclatura').annotate(min_id=Min('id')).values_list('min_id', flat=True)
+        context['grease_types'] = GreaseType.objects.filter(pk__in=unique_ids).order_by('nomenclatura')
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from decimal import Decimal
+
+        selected_aircraft_ids = request.POST.getlist('aircraft_ids')
+        selected_grease_ids = request.POST.getlist('grease_ids')
+
+        all_aircrafts = AircraftModel.objects.all().order_by('name')
+        from django.db.models import Min
+        unique_ids = GreaseType.objects.values('nomenclatura').annotate(min_id=Min('id')).values_list('min_id', flat=True)
+        all_grease_types = GreaseType.objects.filter(pk__in=unique_ids).order_by('nomenclatura')
+
+        # Determinar aeronaves seleccionadas (vacío = todas)
+        if selected_aircraft_ids:
+            target_aircrafts = AircraftModel.objects.filter(pk__in=selected_aircraft_ids)
+        else:
+            target_aircrafts = all_aircrafts
+
+        # Recopilar tasas de consumo agrupadas por nomenclatura
+        consumption_rates = {}  # nomenclatura -> tasa_total
+        for aircraft in target_aircrafts:
+            for assoc in aircraft.grease_associations.all():
+                nom = assoc.grease_type.nomenclatura
+                # Si se filtraron grasas específicas, ignorar las no seleccionadas
+                if selected_grease_ids and str(assoc.grease_type.pk) not in selected_grease_ids:
+                    # Check by nomenclatura too in case multiple presentations
+                    continue
+                rate = assoc.hourly_consumption_rate
+                consumption_rates[nom] = consumption_rates.get(nom, Decimal('0')) + rate
+
+        # Recopilar stock disponible agrupado por nomenclatura
+        stock_by_nom = {}
+        for gt in GreaseType.objects.all():
+            if selected_grease_ids and str(gt.pk) not in selected_grease_ids:
+                # Solo excluir si NINGUNA presentación de esta nomenclatura fue seleccionada
+                any_selected = GreaseType.objects.filter(
+                    pk__in=selected_grease_ids, nomenclatura=gt.nomenclatura
+                ).exists()
+                if not any_selected:
+                    continue
+            nom = gt.nomenclatura
+            avail = sum(
+                b.available_quantity
+                for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION'])
+            )
+            stock_by_nom[nom] = stock_by_nom.get(nom, Decimal('0')) + avail
+
+        # Calcular H_max por cada grasa que tiene consumo
+        breakdown = []
+        max_hours = None
+        bottleneck = None
+        no_consumption = True
+
+        for nom, rate in consumption_rates.items():
+            if rate <= 0:
+                continue
+            no_consumption = False
+            stock = stock_by_nom.get(nom, Decimal('0'))
+            h = stock / rate
+            breakdown.append({
+                'nomenclatura': nom,
+                'stock': stock,
+                'rate': rate,
+                'h_max': h,
+                'is_bottleneck': False,
+            })
+            if max_hours is None or h < max_hours:
+                max_hours = h
+                bottleneck = nom
+
+        # Calcular consumo real a max_hours y marcar cuello de botella
+        if max_hours is not None:
+            for item in breakdown:
+                item['consumption_at_max'] = item['rate'] * max_hours
+                item['stock_remaining'] = item['stock'] - item['consumption_at_max']
+                if item['nomenclatura'] == bottleneck:
+                    item['is_bottleneck'] = True
+
+        # Grasas con stock pero sin consumo (no son limitantes pero informativas)
+        for nom, stock in stock_by_nom.items():
+            if nom not in consumption_rates:
+                breakdown.append({
+                    'nomenclatura': nom,
+                    'stock': stock,
+                    'rate': Decimal('0'),
+                    'h_max': None,
+                    'consumption_at_max': Decimal('0'),
+                    'stock_remaining': stock,
+                    'is_bottleneck': False,
+                    'no_consumption': True,
+                })
+
+        breakdown.sort(key=lambda x: x['nomenclatura'])
+
+        return render(request, self.template_name, {
+            'aircrafts': all_aircrafts,
+            'grease_types': all_grease_types,
+            'selected_aircraft_ids': [int(i) for i in selected_aircraft_ids],
+            'selected_grease_ids': [int(i) for i in selected_grease_ids],
+            'breakdown': breakdown,
+            'max_hours': max_hours,
+            'bottleneck': bottleneck,
+            'no_consumption': no_consumption,
+            'calculated': True,
+        })
+
 # --- CSV Exports ---
 @login_required
 def export_grease_batches_csv(request):
@@ -858,6 +986,15 @@ class ProcurementRequirementUpdateView(LogisticsRequiredMixin, SuccessMessageMix
     success_url = reverse_lazy('requirement_list')
     success_message = "Requerimiento actualizado exitosamente."
     extra_context = {'title': 'Editar Requerimiento de Adquisición'}
+
+class ProcurementRequirementDeleteView(LogisticsRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        from django.shortcuts import get_object_or_404
+        req = get_object_or_404(ProcurementRequirement, pk=pk)
+        grease_name = req.grease_type.nomenclatura
+        req.delete()
+        messages.success(request, f"Requerimiento #{pk} de {grease_name} eliminado exitosamente.")
+        return redirect('requirement_list')
 
 @login_required
 def export_requirements_csv(request):
