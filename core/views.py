@@ -242,6 +242,31 @@ class GreaseTypeUpdateView(LogisticsRequiredMixin, SuccessMessageMixin, UpdateVi
     success_message = "Tipo de Grasa actualizado exitosamente."
     extra_context = {'title': 'Editar Tipo de Grasa'}
 
+class GreaseTypeDeleteView(LogisticsRequiredMixin, SuccessMessageMixin, DeleteView):
+    model = GreaseType
+    template_name = 'core/grease_confirm_delete.html'
+    success_url = reverse_lazy('grease_list')
+    success_message = "Tipo de Grasa eliminado exitosamente."
+
+    @transaction.atomic
+    def form_valid(self, form):
+        # Forced deletion logic:
+        # 1. Catch all batches (active and archived)
+        batches = self.object.batches.all()
+        # 2. Bulk delete stock movements for these batches to bypass ProtectedError
+        from .models import StockMovement
+        StockMovement.objects.filter(batch__in=batches).delete()
+        
+        # Now we can safely delete the object (batches will cascade delete)
+        messages.success(self.request, self.success_message)
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['active_batches_count'] = self.object.batches.filter(is_archived=False).count()
+        context['archived_batches_count'] = self.object.batches.filter(is_archived=True).count()
+        return context
+
 # --- Grease Reference Prices ---
 class GreaseReferencePriceListView(LoginRequiredMixin, ListView):
     model = GreaseReferencePrice
@@ -270,8 +295,6 @@ class GreaseReferencePriceCreateView(LogisticsRequiredMixin, SuccessMessageMixin
         
     def get_initial(self):
         initial = super().get_initial()
-        gt = GreaseType.objects.get(pk=self.kwargs['pk'])
-        initial['presentation_quantity'] = gt.presentacion
         return initial
 
     def form_valid(self, form):
@@ -458,7 +481,10 @@ class GreaseBatchCreateView(ActiveUserRequiredMixin, SuccessMessageMixin, Create
     @transaction.atomic
     def form_valid(self, form):
         # Set available quantity initially to the incoming amount
-        form.instance.available_quantity = form.instance.initial_quantity
+        # initial_quantity may have been auto-calculated by the form's clean() method
+        final_qty = form.cleaned_data.get('initial_quantity') or form.instance.initial_quantity
+        form.instance.initial_quantity = final_qty
+        form.instance.available_quantity = final_qty
         response = super().form_valid(form)
         
         # Generar movimiento de auditoría (INCOMING) indescifrable / no borrable
@@ -1004,7 +1030,7 @@ def export_requirements_csv(request):
     # BOM para que Excel reconozca correctamente los caracteres especiales
     response.write('\ufeff')
     writer = csv.writer(response, dialect='excel', delimiter=';')
-    writer.writerow(['ID Req.', 'Fecha de Solicitud', 'Grasa (Nomenclatura)', 'Presentación', 'Cantidad Solicitada', 'Estado', 'Solicitado Por', 'Notas'])
+    writer.writerow(['ID Req.', 'Fecha de Solicitud', 'Grasa (Nomenclatura)', 'Unidad', 'Cantidad Solicitada', 'Estado', 'Solicitado Por', 'Notas'])
 
     STATUS_LABELS = {
         'PENDING': 'Pendiente',

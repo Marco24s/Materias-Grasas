@@ -59,6 +59,9 @@
                             </span>
                             <span class="text-muted" style="font-size: 0.85em;">
                                 de {{ batch.initial_quantity|smart_number }} {{ batch.grease_type.unidad }} iniciales
+                                {% if batch.container_size and batch.container_count %}
+                                    <br>({{ batch.container_count }} × {{ batch.container_size|smart_number }} {{ batch.grease_type.unidad }})
+                                {% endif %}
                             </span>
                         </div>
                     </td>

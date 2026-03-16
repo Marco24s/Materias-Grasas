@@ -25,6 +25,7 @@ urlpatterns = [
     path('greases/', views.GreaseTypeListView.as_view(), name='grease_list'),
     path('greases/add/', views.GreaseTypeCreateView.as_view(), name='grease_create'),
     path('greases/<int:pk>/edit/', views.GreaseTypeUpdateView.as_view(), name='grease_update'),
+    path('greases/<int:pk>/delete/', views.GreaseTypeDeleteView.as_view(), name='grease_delete'),
     path('greases/<int:pk>/prices/', views.GreaseReferencePriceListView.as_view(), name='grease_price_list'),
     path('greases/<int:pk>/prices/add/', views.GreaseReferencePriceCreateView.as_view(), name='grease_price_create'),
     path('greases/prices/<int:pk>/edit/', views.GreaseReferencePriceUpdateView.as_view(), name='grease_price_update'),

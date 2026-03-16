@@ -35,7 +35,10 @@
                 <h5 class="card-title mb-0">Información de la Casamata</h5>
             </div>
             <div class="card-body">
-                <p><strong>Tipo de Grasa:</strong> {{ batch.grease_type.nomenclatura }} ({{ batch.grease_type.presentacion }} {{ batch.grease_type.unidad }})</p>
+                <p><strong>Tipo de Grasa:</strong> {{ batch.grease_type.nomenclatura }} ({{ batch.grease_type.unidad }})</p>
+                {% if batch.container_size and batch.container_count %}
+                <p><strong>Envases:</strong> {{ batch.container_count }} × {{ batch.container_size }} {{ batch.grease_type.unidad }}</p>
+                {% endif %}
                 <p><strong>Fabricación:</strong> {{ batch.manufacturing_date|date:"d M Y" }}</p>
                 <p>
                     <strong>Vencimiento:</strong> {{ batch.expiration_date|date:"d M Y" }} 

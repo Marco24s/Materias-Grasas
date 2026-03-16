@@ -50,7 +50,6 @@ class AircraftModel(models.Model):
 
 class GreaseType(models.Model):
     unidad = models.CharField(max_length=50, verbose_name="UNIDAD")
-    presentacion = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="PRESENTACIÓN")
     nomenclatura = models.CharField(max_length=150, verbose_name="NOMENCLATURA")
     nne_nsn = models.CharField(max_length=100, verbose_name="N.N.E. / N.S.N.", blank=True, null=True)
     sibys = models.CharField(max_length=100, verbose_name="SIBYS", blank=True, null=True)
@@ -64,10 +63,9 @@ class GreaseType(models.Model):
     class Meta:
         verbose_name = "Tipo de Grasa / Aceite"
         verbose_name_plural = "Tipos de Grasas / Aceites"
-        unique_together = ('nomenclatura', 'presentacion', 'normas_mil_otras')
 
     def __str__(self):
-        return f"{self.nomenclatura} ({self.presentacion} {self.unidad})"
+        return f"{self.nomenclatura} ({self.unidad})"
 
     def get_average_unit_price(self):
         """Calcula el costo promedio por unidad (1Kg o 1L) basado en los precios de referencia."""
@@ -146,7 +144,9 @@ class GreaseBatch(models.Model):
     batch_number = models.CharField(max_length=100, verbose_name="Número de Lote")
     manufacturing_date = models.DateField(verbose_name="Fecha de Fabricación")
     expiration_date = models.DateField(verbose_name="Fecha de Vencimiento")
-    initial_quantity = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Cantidad Inicial")
+    container_size = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="Cantidad por Envase", help_text="Ej: 5 para un envase de 5 Kg")
+    container_count = models.PositiveIntegerField(null=True, blank=True, verbose_name="Cantidad de Envases", help_text="Número de envases/latas en este lote")
+    initial_quantity = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Cantidad Total Inicial")
     available_quantity = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Cantidad Disponible")
     unit_price = models.DecimalField(max_digits=14, decimal_places=6, verbose_name="Costo Unitario Real ($)", blank=True, null=True, help_text="Costo real calculado por unidad (Kg/L).")
     storage_location = models.CharField(max_length=100, verbose_name="Ubicación (Almacén/Unidad)")

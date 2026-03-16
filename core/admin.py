@@ -37,7 +37,7 @@ class AircraftModelAdmin(admin.ModelAdmin):
 
 @admin.register(GreaseType)
 class GreaseTypeAdmin(admin.ModelAdmin):
-    list_display = ('nomenclatura', 'unidad', 'presentacion', 'nne_nsn', 'sibys', 'nato', 'normas_mil_otras')
+    list_display = ('nomenclatura', 'unidad', 'nne_nsn', 'sibys', 'nato', 'normas_mil_otras')
     list_filter = ('recertification_allowed',)
     search_fields = ('nomenclatura', 'nne_nsn', 'nato')
 
