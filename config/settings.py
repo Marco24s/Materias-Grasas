@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'crispy_forms',
     'crispy_bootstrap5',
     'core',
+    'sigera',
 ]
 
 AUTH_USER_MODEL = 'core.CustomUser'
@@ -81,8 +82,12 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'grease_management',     # Nombre de la base de datos que vas a crear
+        'USER': 'postgres',              # Usuario por defecto de PostgreSQL
+        'PASSWORD': 'marcos24',   # <--- Poné la contraseña que elegiste al instalar
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 
@@ -125,5 +130,10 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
 LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'home'
+LOGIN_REDIRECT_URL = 'portal'
 LOGOUT_REDIRECT_URL = 'login'
+
+# Default primary key field type
+# https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

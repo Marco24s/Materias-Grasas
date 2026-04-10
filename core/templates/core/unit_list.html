@@ -26,6 +26,7 @@
                     <td class="text-end">
                         {% if user.is_staff or 'Logistica' in user.groups.all|join:',' or 'Administrador' in user.groups.all|join:',' %}
                         <a href="{% url 'unit_update' unit.id %}" class="btn btn-sm btn-outline-secondary">Editar</a>
+                        <a href="{% url 'unit_delete' unit.id %}" class="btn btn-sm btn-outline-danger ms-1" title="Eliminar"><i class="fa-solid fa-trash"></i></a>
                         {% endif %}
                     </td>
                 </tr>

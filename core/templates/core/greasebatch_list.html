@@ -85,6 +85,7 @@
                         </form>
                         {% endif %}
                         {% if user.is_staff or 'Logistica' in user.groups.all|join:',' or 'Administrador' in user.groups.all|join:',' %}
+                        <a href="{% url 'batch_update' batch.id %}" class="btn btn-sm btn-outline-primary ms-1" title="Editar"><i class="fa-solid fa-pen"></i></a>
                         <a href="{% url 'batch_delete' batch.id %}" class="btn btn-sm btn-outline-danger ms-1" title="Eliminar"><i class="fa-solid fa-trash"></i></a>
                         {% endif %}
                     </td>

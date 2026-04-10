@@ -33,6 +33,11 @@ class LogisticsRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
             return False
         return user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()
 
+# Portal View
+@login_required
+def portal(request):
+    return render(request, 'core/portal.html')
+
 # Home View
 def home(request):
     expiration_alerts = []
@@ -219,6 +224,12 @@ class AircraftUpdateView(LogisticsRequiredMixin, SuccessMessageMixin, UpdateView
     success_url = reverse_lazy('aircraft_list')
     success_message = "Aeronave actualizada exitosamente."
     extra_context = {'title': 'Editar Modelo de Aeronave'}
+
+class AircraftDeleteView(LogisticsRequiredMixin, SuccessMessageMixin, DeleteView):
+    model = AircraftModel
+    template_name = 'core/confirm_delete.html'
+    success_url = reverse_lazy('aircraft_list')
+    success_message = "Aeronave eliminada exitosamente."
 
 # --- Grease Types ---
 class GreaseTypeListView(LoginRequiredMixin, ListView):
@@ -497,6 +508,24 @@ class GreaseBatchCreateView(ActiveUserRequiredMixin, SuccessMessageMixin, Create
         )
         return response
 
+class GreaseBatchUpdateView(ActiveUserRequiredMixin, SuccessMessageMixin, UpdateView):
+    model = GreaseBatch
+    form_class = GreaseBatchForm
+    template_name = 'core/form_base.html'
+    success_url = reverse_lazy('batch_list')
+    success_message = "Lote actualizado exitosamente."
+    extra_context = {'title': 'Editar Lote / Casamata'}
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        update_batch_statuses()
+        return response
+
 class ConsumeGreaseView(ActiveUserRequiredMixin, FormView):
     template_name = 'core/form_base.html'
     form_class = ConsumeGreaseForm
@@ -730,6 +759,8 @@ class FlightHoursCalculatorView(LoginRequiredMixin, TemplateView):
 
         # Recopilar tasas de consumo agrupadas por nomenclatura
         consumption_rates = {}  # nomenclatura -> tasa_total
+        consumption_details = {} # nomenclatura -> detalles
+
         for aircraft in target_aircrafts:
             for assoc in aircraft.grease_associations.all():
                 nom = assoc.grease_type.nomenclatura
@@ -738,7 +769,11 @@ class FlightHoursCalculatorView(LoginRequiredMixin, TemplateView):
                     # Check by nomenclatura too in case multiple presentations
                     continue
                 rate = assoc.hourly_consumption_rate
-                consumption_rates[nom] = consumption_rates.get(nom, Decimal('0')) + rate
+                if rate > 0:
+                    consumption_rates[nom] = consumption_rates.get(nom, Decimal('0')) + rate
+                    if nom not in consumption_details:
+                        consumption_details[nom] = []
+                    consumption_details[nom].append(f"{aircraft.name}: {rate}")
 
         # Recopilar stock disponible agrupado por nomenclatura
         stock_by_nom = {}
@@ -769,12 +804,14 @@ class FlightHoursCalculatorView(LoginRequiredMixin, TemplateView):
             no_consumption = False
             stock = stock_by_nom.get(nom, Decimal('0'))
             h = stock / rate
+            details_str = " + ".join(consumption_details.get(nom, []))
             breakdown.append({
                 'nomenclatura': nom,
                 'stock': stock,
                 'rate': rate,
                 'h_max': h,
                 'is_bottleneck': False,
+                'details_str': details_str,
             })
             if max_hours is None or h < max_hours:
                 max_hours = h
@@ -979,12 +1016,15 @@ def export_procurement_forecast_pdf(request):
     return response
 
 # --- Procurement Requirements ---
-class ProcurementRequirementListView(LogisticsRequiredMixin, ListView):
+class ProcurementRequirementListView(ActiveUserRequiredMixin, ListView):
     model = ProcurementRequirement
     template_name = 'core/procurementrequirement_list.html'
     context_object_name = 'requirements'
     
-class CreateRequirementFromForecastView(LogisticsRequiredMixin, View):
+    def get_queryset(self):
+        return super().get_queryset().order_by('-request_date')
+    
+class CreateRequirementFromForecastView(ActiveUserRequiredMixin, View):
     def post(self, request, grease_type_id, *args, **kwargs):
         from django.shortcuts import get_object_or_404
         gt = get_object_or_404(GreaseType, pk=grease_type_id)
@@ -1005,7 +1045,7 @@ class CreateRequirementFromForecastView(LogisticsRequiredMixin, View):
             
         return redirect('procurement_forecast')
 
-class ProcurementRequirementUpdateView(LogisticsRequiredMixin, SuccessMessageMixin, UpdateView):
+class ProcurementRequirementUpdateView(ActiveUserRequiredMixin, SuccessMessageMixin, UpdateView):
     model = ProcurementRequirement
     form_class = ProcurementRequirementForm
     template_name = 'core/form_base.html'
@@ -1013,7 +1053,7 @@ class ProcurementRequirementUpdateView(LogisticsRequiredMixin, SuccessMessageMix
     success_message = "Requerimiento actualizado exitosamente."
     extra_context = {'title': 'Editar Requerimiento de Adquisición'}
 
-class ProcurementRequirementDeleteView(LogisticsRequiredMixin, View):
+class ProcurementRequirementDeleteView(ActiveUserRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         from django.shortcuts import get_object_or_404
         req = get_object_or_404(ProcurementRequirement, pk=pk)

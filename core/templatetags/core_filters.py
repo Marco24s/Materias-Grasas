@@ -14,12 +14,13 @@ def smart_number(value):
             d = value.normalize()
             if d == d.to_integral():
                 return int(d)
-            return round(d, 3)
+            return d
             
         f_val = float(value)
-        if f_val.is_integer():
-            return int(f_val)
-        return round(f_val, 3)
+        rounded_val = round(f_val, 4)
+        if rounded_val.is_integer():
+            return int(rounded_val)
+        return rounded_val
     except (ValueError, TypeError):
         return value
 

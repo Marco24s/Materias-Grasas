@@ -144,49 +144,14 @@ def get_procurement_forecast():
                 fg['total_projected'] += total_consumption
         
         if not plans_to_simulate:
+            # If no plans, just compute straightforward difference
+            fg['shortfall'] = fg['total_projected'] - fg['total_available']
             forecast_data.append(fg)
             continue
             
-        # Time horizon for simulation
-        end_date = max(p['end'] for p in plans_to_simulate)
-        start_date = min(p['start'] for p in plans_to_simulate)
-
-        # Load batches for simulation (sorted by expiration so we consume oldest first)
-        active_batches = []
-        for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION']).order_by('expiration_date'):
-            active_batches.append({
-                'qty': float(b.available_quantity),
-                'exp': b.expiration_date
-            })
-            
-        sim_shortfall = 0.0
-        current_date = start_date
-        
-        while current_date <= end_date:
-            # Expire batches whose expiration date has STRICTLY passed (if exp == current_date, it's still good today)
-            active_batches = [b for b in active_batches if b['exp'] >= current_date]
-            
-            # Sum up daily demand from overlapping plans
-            todays_demand = sum(p['daily_rate'] for p in plans_to_simulate if p['start'] <= current_date <= p['end'])
-            
-            if todays_demand > 0:
-                remaining_demand = todays_demand
-                for b in active_batches:
-                    if remaining_demand <= 0:
-                        break
-                    if b['qty'] >= remaining_demand:
-                        b['qty'] -= remaining_demand
-                        remaining_demand = 0
-                    else:
-                        remaining_demand -= b['qty']
-                        b['qty'] = 0
-                
-                if remaining_demand > 0:
-                    sim_shortfall += remaining_demand
-            
-            current_date += timedelta(days=1)
-            
-        fg['shortfall'] = sim_shortfall
+        # The user requested the difference to be just the real difference between stock and projected consumption.
+        # We compute the straightforward difference without simulating daily expirations.
+        fg['shortfall'] = fg['total_projected'] - fg['total_available']
         forecast_data.append(fg)
         
     return forecast_data

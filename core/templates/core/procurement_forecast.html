@@ -49,7 +49,7 @@
                             <form method="post" action="{% url 'requirement_create_from_forecast' row.grease_type.id %}" class="m-0 p-0">
                                 {% csrf_token %}
                                 <input type="hidden" name="requested_quantity" value="{{ row.shortfall|stringformat:'.2f' }}">
-                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Se prevee que faltará stock por consumo o vencimientos de las casamatas actuales"><i class="fa-solid fa-cart-plus"></i> Iniciar Adquisición</button>
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="La cantidad proyectada supera el stock actual"><i class="fa-solid fa-cart-plus"></i> Iniciar Adquisición</button>
                             </form>
                         {% elif not row.plan_details %}
                             <span class="text-muted"><i class="fa-solid fa-ban"></i> Sin Consumo Previsto</span>
@@ -71,10 +71,10 @@
 </div>
 
 <div class="alert alert-info mt-4 pb-0">
-    <h5><i class="fa-solid fa-circle-info me-2"></i> Simulador Predictivo de Abastecimiento</h5>
+    <h5><i class="fa-solid fa-circle-info me-2"></i> Información de Previsión de Abastecimiento</h5>
     <ul>
-        <li>El <strong>Consumo Proyectado</strong> es la suma total del requerimiento de la grasa según los Factores de Planeo correspondientes.</li>
-        <li>La <strong>Diferencia</strong> se determina de forma inteligente simulando el paso del tiempo día a día: a medida que transcurren los meses del plan, se consume virtualmente la grasa, pero las casamatas se "tiran" (dejan de estar disponibles) el día en que se vencen. Si el sistema detecta que la grasa se vencerá antes de que se termine el plan de empleo, marcará la cantidad en rojo y requerirá iniciar el abastecimiento o en su defecto una extensión de laboratorio para evitar falta de material en la línea.</li>
+        <li>El <strong>Consumo Proyectado</strong> es la suma total del requerimiento de la grasa según los Factores de Planeo correspondientes para las horas de vuelo planificadas.</li>
+        <li>La <strong>Diferencia</strong> muestra la resta directa entre la Existencia Actual y el Consumo Proyectado. Si el valor es de color rojo, indica que la cantidad proyectada a consumir supera el stock actual y necesitará abastecimiento.</li>
     </ul>
 </div>
 
