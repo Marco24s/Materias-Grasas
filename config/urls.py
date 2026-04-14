@@ -21,5 +21,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('core.urls')),
     path('sigera/', include('sigera.urls', namespace='sigera')),
+    path('budget/', include('budget.urls', namespace='budget')),
     path('accounts/', include('django.contrib.auth.urls')),
 ]

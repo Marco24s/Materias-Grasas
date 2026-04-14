@@ -39,11 +39,7 @@ def consume_grease(grease_type, quantity_to_consume, user, reference="", reason=
         raise ValidationError("La cantidad a consumir debe ser mayor a cero.")
 
     # Lotes disponibles: status SERVICEABLE o NEAR_EXPIRATION, ordenados por fecha de vencimiento más próxima
-    batches_query = GreaseBatch.objects.filter(
-        grease_type=grease_type,
-        status__in=['SERVICEABLE', 'NEAR_EXPIRATION'],
-        available_quantity__gt=0
-    )
+    batches_query = GreaseBatch.objects.available_with_stock().filter(grease_type=grease_type)
     
     if location:
         batches_query = batches_query.filter(storage_location=location)
@@ -103,7 +99,7 @@ def get_procurement_forecast():
     today = date.today()
     
     for gt in GreaseType.objects.all():
-        total_available = sum(b.available_quantity for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION']))
+        total_available = sum(b.available_quantity for b in gt.batches.available())
         
         active_req = gt.requirements.filter(status__in=['PENDING', 'ORDERED']).first()
         
@@ -155,3 +151,152 @@ def get_procurement_forecast():
         forecast_data.append(fg)
         
     return forecast_data
+
+
+from datetime import date
+
+
+@transaction.atomic
+def process_retest_batch(batch, user, form_cleaned_data, old_quantity):
+    """
+    Aplica la lógica de negocio para procesar el retesteo de un lote y sincronizar remanentes.
+    Extraído de RetestBatchView para cumplir con SRP.
+    """
+    reason = form_cleaned_data['reason']
+    new_expiration = form_cleaned_data['new_expiration_date']
+    can_be_retested = form_cleaned_data['can_be_retested']
+    
+    batch.expiration_date = new_expiration
+    batch.can_be_retested = can_be_retested
+    batch.status = 'SERVICEABLE'
+    
+    new_quantity = form_cleaned_data.get('available_quantity', 0)
+    diff = new_quantity - old_quantity
+
+    batch.save()
+    
+    StockMovement.objects.create(
+        batch=batch,
+        movement_type='RETEST',
+        quantity_changed=diff,
+        user=user,
+        reason=f"Retesteo / Extensión de Vencimiento. Nuevo vencimiento: {new_expiration.strftime('%d/%m/%Y')}. {reason}"
+    )
+    
+    matching_batches = GreaseBatch.objects.filter(
+        batch_number=batch.batch_number,
+        grease_type=batch.grease_type,
+        status='PENDING_RETEST'
+    ).exclude(pk=batch.pk)
+    
+    for matched_batch in matching_batches:
+        matched_batch.expiration_date = new_expiration
+        matched_batch.can_be_retested = can_be_retested
+        matched_batch.status = 'SERVICEABLE'
+        matched_batch.save()
+        
+        StockMovement.objects.create(
+            batch=matched_batch,
+            movement_type='RETEST',
+            quantity_changed=0, 
+            user=user,
+            reason=f"Retesteo / Extensión sincronizada desde otra dependencia. Nuevo vencimiento: {new_expiration.strftime('%d/%m/%Y')}."
+        )
+        
+    return batch
+
+def calculate_flight_hours_projection(selected_aircraft_ids=None, selected_grease_ids=None):
+    """
+    Calcula la proyección de horas de vuelo, stock remanente y cuello de botella
+    en base a los consumos y el stock actual.
+    Extraído de FlightHoursCalculatorView (SRP).
+    """
+    from decimal import Decimal
+    from .models import AircraftModel, GreaseType
+
+    all_aircrafts = AircraftModel.objects.all().order_by('name')
+    if selected_aircraft_ids:
+        target_aircrafts = AircraftModel.objects.filter(pk__in=selected_aircraft_ids)
+    else:
+        target_aircrafts = all_aircrafts
+
+    # Recopilar tasas de consumo agrupadas por nomenclatura
+    consumption_rates = {}  
+    consumption_details = {} 
+
+    for aircraft in target_aircrafts:
+        for assoc in aircraft.grease_associations.all():
+            nom = assoc.grease_type.nomenclatura
+            if selected_grease_ids and str(assoc.grease_type.pk) not in selected_grease_ids:
+                continue
+            rate = assoc.hourly_consumption_rate
+            if rate > 0:
+                consumption_rates[nom] = consumption_rates.get(nom, Decimal('0')) + rate
+                if nom not in consumption_details:
+                    consumption_details[nom] = []
+                consumption_details[nom].append(f"{aircraft.name}: {rate}")
+
+    # Recopilar stock disponible agrupado por nomenclatura
+    stock_by_nom = {}
+    for gt in GreaseType.objects.all():
+        if selected_grease_ids and str(gt.pk) not in selected_grease_ids:
+            any_selected = GreaseType.objects.filter(
+                pk__in=selected_grease_ids, nomenclatura=gt.nomenclatura
+            ).exists()
+            if not any_selected:
+                continue
+        nom = gt.nomenclatura
+        avail = sum(b.available_quantity for b in gt.batches.available())
+        stock_by_nom[nom] = stock_by_nom.get(nom, Decimal('0')) + avail
+
+    breakdown = []
+    max_hours = None
+    bottleneck = None
+    no_consumption = True
+
+    for nom, rate in consumption_rates.items():
+        if rate <= 0: continue
+        no_consumption = False
+        stock = stock_by_nom.get(nom, Decimal('0'))
+        h = stock / rate if rate > 0 else 0
+        details_str = " + ".join(consumption_details.get(nom, []))
+        breakdown.append({
+            'nomenclatura': nom,
+            'stock': stock,
+            'rate': rate,
+            'h_max': h,
+            'is_bottleneck': False,
+            'details_str': details_str,
+        })
+        if max_hours is None or h < max_hours:
+            max_hours = h
+            bottleneck = nom
+
+    if max_hours is not None:
+        for item in breakdown:
+            item['consumption_at_max'] = item['rate'] * max_hours
+            item['stock_remaining'] = item['stock'] - item['consumption_at_max']
+            if item['nomenclatura'] == bottleneck:
+                item['is_bottleneck'] = True
+
+    for nom, stock in stock_by_nom.items():
+        if nom not in consumption_rates:
+            breakdown.append({
+                'nomenclatura': nom,
+                'stock': stock,
+                'rate': Decimal('0'),
+                'h_max': None,
+                'consumption_at_max': Decimal('0'),
+                'stock_remaining': stock,
+                'is_bottleneck': False,
+                'no_consumption': True,
+            })
+
+    breakdown.sort(key=lambda x: x['nomenclatura'])
+
+    return {
+        'breakdown': breakdown,
+        'max_hours': max_hours,
+        'bottleneck': bottleneck,
+        'no_consumption': no_consumption
+    }

@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'crispy_bootstrap5',
     'core',
     'sigera',
+    'budget',
 ]
 
 AUTH_USER_MODEL = 'core.CustomUser'

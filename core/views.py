@@ -405,7 +405,7 @@ class GreaseBatchListView(LoginRequiredMixin, ListView):
     def get_queryset(self):
         # Primero actualizamos los estados antes de mostrar
         update_batch_statuses()
-        qs = super().get_queryset().filter(is_archived=False)
+        qs = super().get_queryset().active()
         
         user = self.request.user
         if user.is_authenticated and getattr(user, 'unit', None):
@@ -427,7 +427,7 @@ class ArchivedBatchListView(LoginRequiredMixin, ListView):
     context_object_name = 'batches'
     
     def get_queryset(self):
-        qs = super().get_queryset().filter(is_archived=True)
+        qs = super().get_queryset().archived()
         user = self.request.user
         if user.is_authenticated and getattr(user, 'unit', None):
             from django.db.models import Case, When, Value, IntegerField
@@ -648,69 +648,25 @@ class RetestBatchView(ActiveUserRequiredMixin, UpdateView):
         context['title'] = f'Retestear Lote {self.object.batch_number} - {self.object.grease_type.nomenclatura}'
         return context
 
-    @transaction.atomic
     def form_valid(self, form):
-        reason = form.cleaned_data['reason']
-        extension_years = form.cleaned_data['extension_years']
-        can_be_retested = form.cleaned_data['can_be_retested']
+        from .services import process_retest_batch, update_batch_statuses
+        from django.http import HttpResponseRedirect
         
-        # Calculate new expiration date (based on today or previous expiration, let's use today since it's a retest from now)
-        from datetime import date
-        from dateutil.relativedelta import relativedelta
-        
-        # Alternatively, we could extend from the old expiration date. But normally a retest is valid from the date of the retest.
-        # Let's extend from today, or let's use the old date if it's still in the future.
-        base_date = date.today() if self.object.expiration_date < date.today() else self.object.expiration_date
-        
-        months_to_add = int(extension_years * 12)
-        new_expiration = base_date + relativedelta(months=months_to_add)
-        
-        self.object.expiration_date = new_expiration
-        self.object.can_be_retested = can_be_retested
-        self.object.status = 'SERVICEABLE'
-        
-        # Calcular diferencia si el usuario modificó la disponibilidad por consumo de laboratorio
         old_quantity = form.initial.get('available_quantity', 0)
-        new_quantity = form.cleaned_data.get('available_quantity', 0)
-        diff = new_quantity - old_quantity
-
-        response = super().form_valid(form)
         
-        # Original batch movement (which includes potential quantity deductions for lab sample)
-        StockMovement.objects.create(
-            batch=self.object,
-            movement_type='RETEST',
-            quantity_changed=diff,
-            user=self.request.user,
-            reason=f"Retesteo / Extensión de Vencimiento. Años Habilitados: {extension_years} ({months_to_add} meses). {reason}"
+        # Delegamos toda la lógica y transacciones a la capa "Servicios"
+        process_retest_batch(
+            batch=self.object, 
+            user=self.request.user, 
+            form_cleaned_data=form.cleaned_data, 
+            old_quantity=old_quantity
         )
         
-        # Sincronizar retesteo de las mismas casamatas en otras unidades
-        matching_batches = GreaseBatch.objects.filter(
-            batch_number=self.object.batch_number,
-            grease_type=self.object.grease_type,
-            status='PENDING_RETEST'
-        ).exclude(pk=self.object.pk)
-        
-        for matched_batch in matching_batches:
-            matched_batch.expiration_date = new_expiration
-            matched_batch.can_be_retested = can_be_retested
-            matched_batch.status = 'SERVICEABLE'
-            matched_batch.save()
-            
-            StockMovement.objects.create(
-                batch=matched_batch,
-                movement_type='RETEST',
-                quantity_changed=0, 
-                user=self.request.user,
-                reason=f"Retesteo / Extensión sincronizada desde otra dependencia. Años Habilitados: {extension_years} ({months_to_add} meses)."
-            )
-        
-        # update batch status based on new expiration
+        # Actualizamos estados dependientes de lote
         update_batch_statuses()
         
         messages.success(self.request, "Retesteo registrado y lote actualizado exitosamente.")
-        return response
+        return HttpResponseRedirect(self.get_success_url())
 
 # --- Procurement Forecasting ---
 class ProcurementForecastingView(LoginRequiredMixin, TemplateView):
@@ -741,115 +697,32 @@ class FlightHoursCalculatorView(LoginRequiredMixin, TemplateView):
         return context
 
     def post(self, request, *args, **kwargs):
-        from decimal import Decimal
-
+        from .services import calculate_flight_hours_projection
+        
         selected_aircraft_ids = request.POST.getlist('aircraft_ids')
         selected_grease_ids = request.POST.getlist('grease_ids')
 
+        # Modelos bases necesarios para re-renderizar los selectores del form
         all_aircrafts = AircraftModel.objects.all().order_by('name')
         from django.db.models import Min
         unique_ids = GreaseType.objects.values('nomenclatura').annotate(min_id=Min('id')).values_list('min_id', flat=True)
         all_grease_types = GreaseType.objects.filter(pk__in=unique_ids).order_by('nomenclatura')
 
-        # Determinar aeronaves seleccionadas (vacío = todas)
-        if selected_aircraft_ids:
-            target_aircrafts = AircraftModel.objects.filter(pk__in=selected_aircraft_ids)
-        else:
-            target_aircrafts = all_aircrafts
-
-        # Recopilar tasas de consumo agrupadas por nomenclatura
-        consumption_rates = {}  # nomenclatura -> tasa_total
-        consumption_details = {} # nomenclatura -> detalles
-
-        for aircraft in target_aircrafts:
-            for assoc in aircraft.grease_associations.all():
-                nom = assoc.grease_type.nomenclatura
-                # Si se filtraron grasas específicas, ignorar las no seleccionadas
-                if selected_grease_ids and str(assoc.grease_type.pk) not in selected_grease_ids:
-                    # Check by nomenclatura too in case multiple presentations
-                    continue
-                rate = assoc.hourly_consumption_rate
-                if rate > 0:
-                    consumption_rates[nom] = consumption_rates.get(nom, Decimal('0')) + rate
-                    if nom not in consumption_details:
-                        consumption_details[nom] = []
-                    consumption_details[nom].append(f"{aircraft.name}: {rate}")
-
-        # Recopilar stock disponible agrupado por nomenclatura
-        stock_by_nom = {}
-        for gt in GreaseType.objects.all():
-            if selected_grease_ids and str(gt.pk) not in selected_grease_ids:
-                # Solo excluir si NINGUNA presentación de esta nomenclatura fue seleccionada
-                any_selected = GreaseType.objects.filter(
-                    pk__in=selected_grease_ids, nomenclatura=gt.nomenclatura
-                ).exists()
-                if not any_selected:
-                    continue
-            nom = gt.nomenclatura
-            avail = sum(
-                b.available_quantity
-                for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION'])
-            )
-            stock_by_nom[nom] = stock_by_nom.get(nom, Decimal('0')) + avail
-
-        # Calcular H_max por cada grasa que tiene consumo
-        breakdown = []
-        max_hours = None
-        bottleneck = None
-        no_consumption = True
-
-        for nom, rate in consumption_rates.items():
-            if rate <= 0:
-                continue
-            no_consumption = False
-            stock = stock_by_nom.get(nom, Decimal('0'))
-            h = stock / rate
-            details_str = " + ".join(consumption_details.get(nom, []))
-            breakdown.append({
-                'nomenclatura': nom,
-                'stock': stock,
-                'rate': rate,
-                'h_max': h,
-                'is_bottleneck': False,
-                'details_str': details_str,
-            })
-            if max_hours is None or h < max_hours:
-                max_hours = h
-                bottleneck = nom
-
-        # Calcular consumo real a max_hours y marcar cuello de botella
-        if max_hours is not None:
-            for item in breakdown:
-                item['consumption_at_max'] = item['rate'] * max_hours
-                item['stock_remaining'] = item['stock'] - item['consumption_at_max']
-                if item['nomenclatura'] == bottleneck:
-                    item['is_bottleneck'] = True
-
-        # Grasas con stock pero sin consumo (no son limitantes pero informativas)
-        for nom, stock in stock_by_nom.items():
-            if nom not in consumption_rates:
-                breakdown.append({
-                    'nomenclatura': nom,
-                    'stock': stock,
-                    'rate': Decimal('0'),
-                    'h_max': None,
-                    'consumption_at_max': Decimal('0'),
-                    'stock_remaining': stock,
-                    'is_bottleneck': False,
-                    'no_consumption': True,
-                })
-
-        breakdown.sort(key=lambda x: x['nomenclatura'])
+        # Delegamos la lógica masiva de cálculo matemático al Servicio
+        calc_results = calculate_flight_hours_projection(
+            selected_aircraft_ids=selected_aircraft_ids,
+            selected_grease_ids=selected_grease_ids
+        )
 
         return render(request, self.template_name, {
             'aircrafts': all_aircrafts,
             'grease_types': all_grease_types,
-            'selected_aircraft_ids': [int(i) for i in selected_aircraft_ids],
-            'selected_grease_ids': [int(i) for i in selected_grease_ids],
-            'breakdown': breakdown,
-            'max_hours': max_hours,
-            'bottleneck': bottleneck,
-            'no_consumption': no_consumption,
+            'selected_aircraft_ids': [int(i) for i in selected_aircraft_ids] if selected_aircraft_ids else [],
+            'selected_grease_ids': [int(i) for i in selected_grease_ids] if selected_grease_ids else [],
+            'breakdown': calc_results['breakdown'],
+            'max_hours': calc_results['max_hours'],
+            'bottleneck': calc_results['bottleneck'],
+            'no_consumption': calc_results['no_consumption'],
             'calculated': True,
         })
 

@@ -205,11 +205,11 @@ class GreaseReferencePriceForm(forms.ModelForm):
             pass
 
 class RetestBatchForm(forms.ModelForm):
-    extension_years = forms.FloatField(
+    new_expiration_date = forms.DateField(
         required=True,
-        min_value=0.1,
-        label="Años Habilitados",
-        help_text="Por cuántos años se extiende la habilitación (ej. '0.5' para medio año, '1.5', '2')."
+        label="Nueva Fecha de Vencimiento",
+        widget=forms.DateInput(attrs={'type': 'date'}),
+        help_text="Fecha de vencimiento otorgada por el laboratorio tras el retesteo."
     )
     reason = forms.CharField(
         widget=forms.Textarea(attrs={'rows': 3}), 
@@ -220,7 +220,7 @@ class RetestBatchForm(forms.ModelForm):
     
     class Meta:
         model = GreaseBatch
-        fields = ['extension_years', 'available_quantity', 'can_be_retested', 'reason']
+        fields = ['new_expiration_date', 'available_quantity', 'can_be_retested', 'reason']
         labels = {
             'can_be_retested': 'Puede volver a retestearse',
         }
@@ -228,6 +228,13 @@ class RetestBatchForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['available_quantity'].help_text = "Ajustar si la muestra para laboratorio consumió material."
+
+    def clean_new_expiration_date(self):
+        from datetime import date
+        new_date = self.cleaned_data['new_expiration_date']
+        if new_date <= date.today():
+            raise forms.ValidationError("La nueva fecha de vencimiento debe ser posterior a hoy.")
+        return new_date
 
 class ProcurementRequirementForm(forms.ModelForm):
     class Meta:

@@ -132,6 +132,24 @@ class FlightPlan(models.Model):
             })
         return consumptions
 
+class GreaseBatchQuerySet(models.QuerySet):
+    def available(self):
+        """Retorna solo las casamatas utilizables para el consumo."""
+        return self.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION'])
+        
+    def active(self):
+        """Retorna casamatas actuales (no mandadas al archivo muerto)."""
+        return self.filter(is_archived=False)
+        
+    def archived(self):
+        """Retorna el historial histórico."""
+        return self.filter(is_archived=True)
+        
+    def available_with_stock(self):
+        """Retorna casamatas utilizables y con stock real positivo."""
+        return self.available().filter(available_quantity__gt=0)
+
+
 class GreaseBatch(models.Model):
     STATUS_CHOICES = [
         ('SERVICEABLE', 'Retesteable'),
@@ -139,6 +157,8 @@ class GreaseBatch(models.Model):
         ('EXPIRED', 'Vencido'),
         ('PENDING_RETEST', 'Retesteando...'),
     ]
+
+    objects = GreaseBatchQuerySet.as_manager()
 
     grease_type = models.ForeignKey(GreaseType, on_delete=models.CASCADE, related_name="batches", verbose_name="Tipo de Grasa")
     batch_number = models.CharField(max_length=100, verbose_name="Número de Lote")

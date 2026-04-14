@@ -123,8 +123,12 @@
 
             <!-- Tabla de Desglose -->
             <div class="card shadow-sm border-0 overflow-hidden">
-                <div class="card-header bg-white fw-bold border-bottom py-3">
-                    <i class="fa-solid fa-table me-2 text-primary"></i> Desglose de Consumo Estimado
+                <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                    <span class="fw-bold"><i class="fa-solid fa-table me-2 text-primary"></i> Desglose de Consumo Estimado</span>
+                    <div class="form-check form-switch mb-0 d-flex align-items-center gap-2" title="Oculta las grasas que no se consumen con los filtros seleccionados">
+                        <input class="form-check-input" type="checkbox" role="switch" id="toggleInactivas" {% if selected_aircraft_ids or selected_grease_ids %}checked{% endif %} onchange="toggleFilasInactivas(this.checked)">
+                        <label class="form-check-label small text-muted fw-normal" for="toggleInactivas">Solo grasas afectadas</label>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -141,7 +145,7 @@
                             </thead>
                             <tbody>
                                 {% for item in breakdown %}
-                                <tr class="{% if item.is_bottleneck %}table-warning{% elif item.no_consumption %}table-light text-muted{% endif %}">
+                                <tr class="{% if item.is_bottleneck %}table-warning{% elif item.no_consumption %}table-light text-muted row-inactiva{% endif %}" {% if item.no_consumption %}data-inactiva="true"{% endif %}>
                                     <td>
                                         <div class="fw-bold">{{ item.nomenclatura }}</div>
                                         {% if item.is_bottleneck %}
@@ -245,6 +249,21 @@ function filterCheckboxes(containerId, query) {
         }
     }
 }
+
+function toggleFilasInactivas(soloAfectadas) {
+    const filas = document.querySelectorAll('tr[data-inactiva="true"]');
+    filas.forEach(function(fila) {
+        fila.style.display = soloAfectadas ? 'none' : '';
+    });
+}
+
+// Aplicar estado inicial del toggle al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+    const toggle = document.getElementById('toggleInactivas');
+    if (toggle) {
+        toggleFilasInactivas(toggle.checked);
+    }
+});
 </script>
 
 {% block extra_js %}

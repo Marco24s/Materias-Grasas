@@ -1,0 +1,202 @@
+{% extends "budget/base_budget.html" %}
+
+{% block budget_content %}
+<div class="budget-header animate__animated animate__fadeIn">
+    <div class="row align-items-center">
+        <div class="col">
+            <h1 class="h2 mb-1">Panel de Control Presupuestario</h1>
+            <p class="mb-0 opacity-75">
+                {% if fiscal_year %}
+                    Monitoreo del Ejercicio Económico {{ fiscal_year.year }}
+                {% else %}
+                    No hay un ejercicio económico activo actualmente.
+                {% endif %}
+            </p>
+        </div>
+        <div class="col-auto">
+            <span class="badge bg-white text-success px-3 py-2 rounded-pill shadow-sm">
+                <i class="fa-solid fa-clock me-1"></i> Estado: {{ fiscal_year.get_status_display|default:"N/A" }}
+            </span>
+        </div>
+    </div>
+</div>
+
+{% if fiscal_year %}
+<div class="row g-4 mb-4">
+    <!-- Columna Izquierda: AA.PP. -->
+    <div class="col-lg-8">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card card-stats h-100 p-3">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="bg-primary bg-opacity-10 p-2 rounded-3 me-3">
+                            <i class="fa-solid fa-vault text-primary h4 mb-0"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Crédito Total AA.PP.</div>
+                            <h3 class="fw-bold mb-0">${{ stats.total_credit|floatformat:2 }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card card-stats h-100 p-3">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="bg-success bg-opacity-10 p-2 rounded-3 me-3">
+                            <i class="fa-solid fa-diagram-project text-success h4 mb-0"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Crédito Distribuido (Techos)</div>
+                            <h3 class="fw-bold mb-0">${{ stats.total_allocated|floatformat:2 }}</h3>
+                        </div>
+                    </div>
+                    {% with percent=stats.total_allocated|divisibleby:stats.total_credit|default:0 %}
+                    <div class="progress mt-2" style="height: 6px;">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ stats.total_allocated|default:0|stringformat:'f' }}%" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    {% endwith %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card card-stats mt-4 p-4">
+            <h5 class="fw-bold mb-4">Progreso de la Ejecución (Total General)</h5>
+            
+            <div class="mb-4">
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="text-muted">Comprometido</span>
+                    <span class="fw-bold">${{ stats.total_commitment|floatformat:2 }}</span>
+                </div>
+                <div class="progress" style="height: 10px;">
+                    <div class="progress-bar bg-warning" role="progressbar" style="width: 100%" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="text-muted">Devengado</span>
+                    <span class="fw-bold">${{ stats.total_accrued|floatformat:2 }}</span>
+                </div>
+                <div class="progress" style="height: 10px;">
+                    {% if stats.total_commitment > 0 %}
+                    <div class="progress-bar bg-info" role="progressbar" style="width: {% widthratio stats.total_accrued stats.total_commitment 100 %}%" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
+                    {% else %}
+                    <div class="progress-bar bg-info" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mb-0">
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="text-muted">Pagado</span>
+                    <span class="fw-bold">${{ stats.total_paid|floatformat:2 }}</span>
+                </div>
+                <div class="progress" style="height: 10px;">
+                    {% if stats.total_accrued > 0 %}
+                    <div class="progress-bar bg-success" role="progressbar" style="width: {% widthratio stats.total_paid stats.total_accrued 100 %}%" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
+                    {% else %}
+                    <div class="progress-bar bg-success" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Columna Derecha: Alertas/Quick Actions -->
+    <div class="col-lg-4">
+        <div class="card card-stats p-4 mb-4">
+            <h6 class="fw-bold mb-3"><i class="fa-solid fa-bolt text-warning me-2"></i>Acciones Rápidas</h6>
+            <div class="d-grid gap-2">
+                <a href="{% url 'budget:execution_commitment' %}" class="btn btn-outline-success btn-sm text-start py-2">
+                    <i class="fa-solid fa-plus-circle me-2"></i> Registrar Compromiso
+                </a>
+                <a href="{% url 'budget:credit_create' %}" class="btn btn-outline-primary btn-sm text-start py-2">
+                    <i class="fa-solid fa-circle-plus me-2"></i> Dar de Alta Crédito
+                </a>
+                <a href="{% url 'budget:allocation_create' %}" class="btn btn-outline-dark btn-sm text-start py-2">
+                   <i class="fa-solid fa-share-nodes me-2"></i> Distribuir a Unidad
+                </a>
+            </div>
+        </div>
+
+        <div class="card card-stats p-4 border-start border-4 border-warning">
+            <h6 class="fw-bold mb-3">Resumen de Saldos AA.PP.</h6>
+            <div class="small mb-2 d-flex justify-content-between">
+                <span>Saldo por Distribuir:</span>
+                <span class="fw-bold text-success">${{ stats.available_to_allocate|floatformat:2 }}</span>
+            </div>
+            <div class="small d-flex justify-content-between">
+                <span>Saldo por Ejecutar:</span>
+                <span class="fw-bold text-warning">${{ stats.available_to_execute|floatformat:2 }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if unit_report %}
+<div class="row animate__animated animate__fadeInUp">
+    <div class="col-12">
+        <div class="card card-stats p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="fw-bold mb-0">
+                    <i class="fa-solid fa-table-list text-success me-2"></i> 
+                    Estado Crediticio Mensual (Desglose por Unidad)
+                </h5>
+                <span class="badge bg-light text-muted border px-3">Valores en Pesos ($)</span>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-hover align-middle border-top">
+                    <thead class="bg-light">
+                        <tr class="small text-uppercase text-muted">
+                            <th>Unidad</th>
+                            <th class="text-end">Techo Asig.</th>
+                            <th class="text-end">Compromiso</th>
+                            <th class="text-end">Devengado</th>
+                            <th class="text-end">Pagado</th>
+                            <th class="text-center">Ejecución (%)</th>
+                            <th class="text-end">Residuos/Deudas</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in unit_report %}
+                        <tr>
+                            <td><strong>{{ row.unit.name }}</strong></td>
+                            <td class="text-end">${{ row.allocated|floatformat:2 }}</td>
+                            <td class="text-end fw-bold">${{ row.commitment|floatformat:2 }}</td>
+                            <td class="text-end text-info">${{ row.accrued|floatformat:2 }}</td>
+                            <td class="text-end text-success">${{ row.paid|floatformat:2 }}</td>
+                            <td class="text-center">
+                                <div class="progress" style="height: 12px; min-width: 100px;">
+                                    <div class="progress-bar {% if row.percent_executed > 90 %}bg-danger{% elif row.percent_executed > 70 %}bg-warning{% else %}bg-success{% endif %}" 
+                                         role="progressbar" style="width: {{ row.percent_executed|floatformat:0 }}%">
+                                    </div>
+                                </div>
+                                <small class="text-muted">{{ row.percent_executed|floatformat:1 }}%</small>
+                            </td>
+                            <td class="text-end small">
+                                <div title="Residuos Pasivos (Comp. - Dev.)">R.P: ${{ row.residuos|floatformat:2 }}</div>
+                                <div class="text-muted" title="Deuda Flotante (Dev. - Pag.)">D.F: ${{ row.deuda_flotante|floatformat:2 }}</div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% else %}
+<div class="text-center py-5">
+    <div class="bg-white p-5 rounded-4 shadow-sm d-inline-block">
+        <i class="fa-solid fa-calendar-xmark text-muted h1 mb-4"></i>
+        <h3>Configuración Necesaria</h3>
+        <p class="text-muted">Para comenzar, debe crear un Ejercicio Económico activo.</p>
+        <a href="{% url 'budget:fiscal_year_create' %}" class="btn btn-success rounded-pill px-4">
+            Crear Ejercicio 2026
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

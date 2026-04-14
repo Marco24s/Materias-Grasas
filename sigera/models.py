@@ -124,30 +124,25 @@ class ClothingAssignment(models.Model):
 
     @property
     def expiration_date(self):
-        shelf_life_months = self.batch.clothing_size.clothing_type.shelf_life_months
-        if not shelf_life_months:
+        """
+        Calcula la fecha de vencimiento basada en la vida útil teórica de la prenda.
+        """
+        if not self.assigned_date:
             return None
-        
-        import calendar
-        from datetime import date
-        
-        month = self.assigned_date.month - 1 + shelf_life_months
-        year = self.assigned_date.year + month // 12
-        month = month % 12 + 1
-        day = self.assigned_date.day
-        
-        _, last_day_of_month = calendar.monthrange(year, month)
-        day = min(day, last_day_of_month)
-        
-        return date(year, month, day)
+        from dateutil.relativedelta import relativedelta
+        months = self.batch.clothing_size.clothing_type.shelf_life_months
+        return self.assigned_date + relativedelta(months=months)
 
     @property
     def is_expired(self):
+        """
+        Indica si el cargo ha superado su vida útil teórica.
+        """
+        exp = self.expiration_date
+        if not exp:
+            return False
         from datetime import date
-        exp_date = self.expiration_date
-        if exp_date:
-            return date.today() > exp_date
-        return False
+        return exp <= date.today()
 
 
 class StockThreshold(models.Model):

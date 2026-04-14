@@ -53,9 +53,6 @@
                                 {% endif %}
                             </td>
                             <td class="py-3 text-center">
-                                <a href="{% url 'sigera:batch_movements' batch.pk %}" class="btn btn-sm btn-outline-secondary me-1" title="Ver Movimientos">
-                                    <i class="fa-solid fa-list"></i>
-                                </a>
                                 <form action="#" method="post" class="d-inline">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Marcar como consumido?');" title="Marcar como Consumido">
