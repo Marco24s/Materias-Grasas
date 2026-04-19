@@ -50,11 +50,18 @@
                             <h3 class="fw-bold mb-0">${{ stats.total_allocated|floatformat:2 }}</h3>
                         </div>
                     </div>
-                    {% with percent=stats.total_allocated|divisibleby:stats.total_credit|default:0 %}
+                    {% if stats.total_credit > 0 %}
                     <div class="progress mt-2" style="height: 6px;">
-                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ stats.total_allocated|default:0|stringformat:'f' }}%" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {% widthratio stats.total_allocated stats.total_credit 100 %}%" 
+                             aria-valuenow="50" aria-valuemin="0" aria-valuemax="100">
+                        </div>
                     </div>
-                    {% endwith %}
+                    {% else %}
+                    <div class="progress mt-2" style="height: 6px;">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

@@ -209,6 +209,21 @@ class AircraftListView(LoginRequiredMixin, ListView):
     template_name = 'core/aircraft_list.html'
     context_object_name = 'aircrafts'
 
+    def get_queryset(self):
+        user = self.request.user
+        qs = super().get_queryset()
+        
+        # Admin y Logística ven todo
+        if user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists():
+            return qs
+            
+        # Usuarios con unidad ven solo sus modelos
+        if getattr(user, 'unit', None):
+            return qs.filter(unit=user.unit)
+            
+        # Sin unidad y sin privilegios no ve nada
+        return qs.none()
+
 class AircraftCreateView(LogisticsRequiredMixin, SuccessMessageMixin, CreateView):
     model = AircraftModel
     form_class = AircraftModelForm
@@ -344,6 +359,21 @@ class AircraftGreaseListView(LoginRequiredMixin, ListView):
     template_name = 'core/aircraftgrease_list.html'
     context_object_name = 'associations'
 
+    def get_queryset(self):
+        user = self.request.user
+        qs = super().get_queryset()
+        
+        # Admin y Logística ven todo
+        if user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists():
+            return qs
+            
+        # Usuarios con unidad ven solo lo de su aeronave
+        if getattr(user, 'unit', None):
+            return qs.filter(aircraft_model__unit=user.unit)
+            
+        # Sin unidad y sin privilegios no ve nada
+        return qs.none()
+
 class AircraftGreaseCreateView(LogisticsRequiredMixin, SuccessMessageMixin, CreateView):
     model = AircraftGrease
     form_class = AircraftGreaseForm
@@ -372,6 +402,21 @@ class FlightPlanListView(LoginRequiredMixin, ListView):
     template_name = 'core/flightplan_list.html'
     context_object_name = 'flight_plans'
     ordering = ['-period_start_date']
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = super().get_queryset()
+        
+        # Admin y Logística ven todo
+        if user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists():
+            return qs
+            
+        # Usuarios con unidad ven solo sus planes
+        if getattr(user, 'unit', None):
+            return qs.filter(aircraft_model__unit=user.unit)
+            
+        # Sin unidad y sin privilegios no ve nada
+        return qs.none()
 
 class FlightPlanCreateView(LogisticsRequiredMixin, SuccessMessageMixin, CreateView):
     model = FlightPlan
@@ -408,7 +453,14 @@ class GreaseBatchListView(LoginRequiredMixin, ListView):
         qs = super().get_queryset().active()
         
         user = self.request.user
+        is_admin = user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()
+        
+        if not is_admin and getattr(user, 'unit', None):
+            # Particular user: ONLY see their unit
+            return qs.filter(storage_location=user.unit.name).order_by('expiration_date')
+            
         if user.is_authenticated and getattr(user, 'unit', None):
+            # Admin with a unit (optional sorting preference)
             from django.db.models import Case, When, Value, IntegerField
             qs = qs.annotate(
                 is_own_unit=Case(
@@ -429,6 +481,12 @@ class ArchivedBatchListView(LoginRequiredMixin, ListView):
     def get_queryset(self):
         qs = super().get_queryset().archived()
         user = self.request.user
+        is_admin = user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()
+
+        if not is_admin and getattr(user, 'unit', None):
+            # Particular user: ONLY see their unit
+            return qs.filter(storage_location=user.unit.name).order_by('-manufacturing_date')
+
         if user.is_authenticated and getattr(user, 'unit', None):
             from django.db.models import Case, When, Value, IntegerField
             qs = qs.annotate(
@@ -677,8 +735,12 @@ class ProcurementForecastingView(LoginRequiredMixin, TemplateView):
         from .services import get_procurement_forecast
         from .services import update_batch_statuses
         
+        user = self.request.user
+        is_admin = user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()
+        location = user.unit.name if (not is_admin and getattr(user, 'unit', None)) else None
+
         update_batch_statuses()
-        forecast_data = get_procurement_forecast()
+        forecast_data = get_procurement_forecast(location=location)
         context['forecast_data'] = forecast_data
         
         return context
@@ -689,7 +751,14 @@ class FlightHoursCalculatorView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['aircrafts'] = AircraftModel.objects.all().order_by('name')
+        user = self.request.user
+        is_admin = user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()
+        
+        aircraft_qs = AircraftModel.objects.all().order_by('name')
+        if not is_admin and getattr(user, 'unit', None):
+            aircraft_qs = aircraft_qs.filter(unit=user.unit)
+        
+        context['aircrafts'] = aircraft_qs
         # SQLite-compatible: get one GreaseType per unique nomenclatura
         from django.db.models import Min
         unique_ids = GreaseType.objects.values('nomenclatura').annotate(min_id=Min('id')).values_list('min_id', flat=True)
@@ -699,11 +768,18 @@ class FlightHoursCalculatorView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         from .services import calculate_flight_hours_projection
         
+        user = request.user
+        is_admin = user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()
+        location = user.unit.name if (not is_admin and getattr(user, 'unit', None)) else None
+
         selected_aircraft_ids = request.POST.getlist('aircraft_ids')
         selected_grease_ids = request.POST.getlist('grease_ids')
 
         # Modelos bases necesarios para re-renderizar los selectores del form
         all_aircrafts = AircraftModel.objects.all().order_by('name')
+        if not is_admin and getattr(user, 'unit', None):
+            all_aircrafts = all_aircrafts.filter(unit=user.unit)
+
         from django.db.models import Min
         unique_ids = GreaseType.objects.values('nomenclatura').annotate(min_id=Min('id')).values_list('min_id', flat=True)
         all_grease_types = GreaseType.objects.filter(pk__in=unique_ids).order_by('nomenclatura')
@@ -711,7 +787,8 @@ class FlightHoursCalculatorView(LoginRequiredMixin, TemplateView):
         # Delegamos la lógica masiva de cálculo matemático al Servicio
         calc_results = calculate_flight_hours_projection(
             selected_aircraft_ids=selected_aircraft_ids,
-            selected_grease_ids=selected_grease_ids
+            selected_grease_ids=selected_grease_ids,
+            location=location
         )
 
         return render(request, self.template_name, {
@@ -730,6 +807,9 @@ class FlightHoursCalculatorView(LoginRequiredMixin, TemplateView):
 @login_required
 def export_grease_batches_csv(request):
     update_batch_statuses()
+    user = request.user
+    is_admin = user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()
+    
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = 'attachment; filename="stock_casamatas.csv"'
     
@@ -739,6 +819,9 @@ def export_grease_batches_csv(request):
     writer.writerow(['Tipo de Grasa', 'Casamata', 'Vencimiento', 'Estado', 'Ubicación', 'Cantidad Inicial', 'Cantidad Disponible'])
     
     batches = GreaseBatch.objects.all().order_by('expiration_date')
+    if not is_admin and getattr(user, 'unit', None):
+        batches = batches.filter(storage_location=user.unit.name)
+        
     for b in batches:
         writer.writerow([
             b.grease_type.nomenclatura,
@@ -754,6 +837,10 @@ def export_grease_batches_csv(request):
 @login_required
 def export_procurement_forecast_csv(request):
     update_batch_statuses()
+    user = request.user
+    is_admin = user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()
+    location = user.unit.name if (not is_admin and getattr(user, 'unit', None)) else None
+
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = 'attachment; filename="pronostico_abastecimiento.csv"'
     
@@ -763,7 +850,7 @@ def export_procurement_forecast_csv(request):
     writer.writerow(['Tipo de Grasa', 'Stock Disponible', 'Consumo Proyectado', 'Diferencia (Sobrante/Faltante)', 'Compra Recomendada'])
     
     from .services import get_procurement_forecast
-    forecast_data = get_procurement_forecast()
+    forecast_data = get_procurement_forecast(location=location)
     
     for row in forecast_data:
         recommended_purchase = row['shortfall'] if row['shortfall'] > 0 else 0
@@ -787,16 +874,27 @@ from reportlab.lib.styles import getSampleStyleSheet
 @login_required
 def export_grease_batches_pdf(request):
     update_batch_statuses()
+    user = request.user
+    is_admin = user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=18)
     elements = []
     
     styles = getSampleStyleSheet()
-    elements.append(Paragraph("Reporte de Stock de Casamatas", styles['Title']))
+    title = "Reporte de Stock de Casamatas"
+    if not is_admin and getattr(user, 'unit', None):
+        title += f" - Unidad: {user.unit.name}"
+        
+    elements.append(Paragraph(title, styles['Title']))
     elements.append(Spacer(1, 12))
     
     data = [['Tipo de Grasa', 'Casamata', 'Vencimiento', 'Estado', 'Ubicación', 'Inicial', 'Disponible']]
-    for b in GreaseBatch.objects.all().order_by('expiration_date'):
+    batches = GreaseBatch.objects.all().order_by('expiration_date')
+    if not is_admin and getattr(user, 'unit', None):
+        batches = batches.filter(storage_location=user.unit.name)
+
+    for b in batches:
         data.append([
             b.grease_type.nomenclatura,
             b.batch_number,
@@ -829,41 +927,34 @@ def export_grease_batches_pdf(request):
 @login_required
 def export_procurement_forecast_pdf(request):
     update_batch_statuses()
+    user = request.user
+    is_admin = user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()
+    location = user.unit.name if (not is_admin and getattr(user, 'unit', None)) else None
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=18)
     elements = []
     
     styles = getSampleStyleSheet()
-    elements.append(Paragraph("Reporte de Pronóstico de Abastecimiento", styles['Title']))
+    title = "Reporte de Pronóstico de Abastecimiento"
+    if location:
+        title += f" - Unidad: {location}"
+    elements.append(Paragraph(title, styles['Title']))
     elements.append(Spacer(1, 12))
     
     data = [['Tipo de Grasa', 'Stock\nDisponible', 'Consumo\nProyectado', 'Diferencia\n(Sobrante/Faltante)', 'Recomendación\nde Compra']]
     
-    forecast_dict = {}
-    for gt in GreaseType.objects.all():
-        total_available = sum(b.available_quantity for b in gt.batches.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION']))
-        
-        if gt.nomenclatura not in forecast_dict:
-            forecast_dict[gt.nomenclatura] = {
-                'available': 0,
-                'plan_details_map': {}
-            }
-            
-        forecast_dict[gt.nomenclatura]['available'] += total_available
-        
-        for assoc in gt.aircraft_associations.all():
-            for plan in assoc.aircraft_model.flight_plans.all():
-                proj = assoc.hourly_consumption_rate * plan.planned_hours
-                forecast_dict[gt.nomenclatura]['plan_details_map'][(assoc.aircraft_model.id, plan.id)] = proj
+    from .services import get_procurement_forecast
+    forecast_data = get_procurement_forecast(location=location)
                 
-    for nom, f_data in forecast_dict.items():
-        total_projected = sum(f_data['plan_details_map'].values())
-        shortfall = total_projected - f_data['available']
+    for row in forecast_data:
+        total_projected = row['total_projected']
+        shortfall = row['shortfall']
         recommended_purchase = shortfall if shortfall > 0 else 0
         
         data.append([
-            nom,
-            str(round(f_data['available'], 2)),
+            row['grease_type'].nomenclatura,
+            str(round(row['total_available'], 2)),
             str(round(total_projected, 2)),
             str(round(shortfall, 2)),
             str(round(recommended_purchase, 2))
@@ -895,7 +986,13 @@ class ProcurementRequirementListView(ActiveUserRequiredMixin, ListView):
     context_object_name = 'requirements'
     
     def get_queryset(self):
-        return super().get_queryset().order_by('-request_date')
+        qs = super().get_queryset().order_by('-request_date')
+        user = self.request.user
+        is_admin = user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()
+        
+        if not is_admin and getattr(user, 'unit', None):
+            return qs.filter(requested_by__unit=user.unit)
+        return qs
     
 class CreateRequirementFromForecastView(ActiveUserRequiredMixin, View):
     def post(self, request, grease_type_id, *args, **kwargs):
@@ -953,6 +1050,12 @@ def export_requirements_csv(request):
     }
 
     requirements = ProcurementRequirement.objects.all().order_by('-request_date')
+    user = request.user
+    is_admin = user.is_superuser or user.groups.filter(name__in=['Administrador', 'Logistica']).exists()
+    
+    if not is_admin and getattr(user, 'unit', None):
+        requirements = requirements.filter(requested_by__unit=user.unit)
+
     for req in requirements:
         writer.writerow([
             f'#{req.id}',

@@ -123,12 +123,55 @@ class FlightPlan(models.Model):
         return f"Plan {self.get_period_type_display()} - {self.aircraft_model.name} ({self.planned_hours} hs)"
 
     def get_projected_consumption(self):
-        """Calcula el consumo proyectado para este plan basado en las tasas de consumo."""
+        """
+        Calcula el consumo proyectado y realiza un análisis detallado de stock seguro 
+        y en riesgo (vencimientos) para la unidad de la aeronave.
+        """
+        from django.db.models import Sum, Min
         consumptions = []
+        unit_name = self.aircraft_model.unit.name
+        start_date = self.period_start_date
+        end_date = self.period_end_date or self.period_start_date
+        
         for assoc in self.aircraft_model.grease_associations.all():
+            projected = assoc.hourly_consumption_rate * self.planned_hours
+            
+            # 1. Todo el stock físico disponible hoy en la unidad
+            unit_batches = assoc.grease_type.batches.available().filter(
+                storage_location=unit_name
+            )
+            
+            total_physical_stock = unit_batches.aggregate(total=Sum('available_quantity'))['total'] or 0
+            
+            # 2. Stock Seguro (Vence después del fin del plan)
+            safe_stock = unit_batches.filter(
+                expiration_date__gte=end_date
+            ).aggregate(total=Sum('available_quantity'))['total'] or 0
+            
+            # 3. Stock en Riesgo (Vence durante el periodo del plan)
+            expiring_batches = unit_batches.filter(
+                expiration_date__gte=start_date,
+                expiration_date__lt=end_date
+            ).order_by('expiration_date')
+            
+            expiring_info = []
+            for b in expiring_batches:
+                expiring_info.append({
+                    'amount': b.available_quantity,
+                    'date': b.expiration_date
+                })
+
+            # 4. Próximo vencimiento (el más cercano de todos los lotes disponibles)
+            next_expiry = unit_batches.aggregate(earliest=Min('expiration_date'))['earliest']
+            
             consumptions.append({
                 'grease_type': assoc.grease_type,
-                'projected_amount': assoc.hourly_consumption_rate * self.planned_hours
+                'projected_amount': projected,
+                'safe_stock': safe_stock,
+                'total_physical_stock': total_physical_stock,
+                'expiring_info': expiring_info,
+                'next_expiry': next_expiry,
+                'insufficient_stock': projected > safe_stock
             })
         return consumptions
 

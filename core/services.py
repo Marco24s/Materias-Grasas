@@ -82,7 +82,7 @@ def consume_grease(grease_type, quantity_to_consume, user, reference="", reason=
 
     return True
 
-def get_procurement_forecast():
+def get_procurement_forecast(location=None):
     """
     Calculates the procurement forecast using a daily fractional simulation.
     Returns a list of dictionaries, one per GreaseType, containing:
@@ -91,6 +91,7 @@ def get_procurement_forecast():
     - total_projected
     - shortfall (amount missing taking into account expirations over time)
     - plan_details (list of active plans contributing to consumption)
+    - active_requirement
     """
     from datetime import date, timedelta
     from .models import GreaseType
@@ -99,7 +100,11 @@ def get_procurement_forecast():
     today = date.today()
     
     for gt in GreaseType.objects.all():
-        total_available = sum(b.available_quantity for b in gt.batches.available())
+        batches_qs = gt.batches.available()
+        if location:
+            batches_qs = batches_qs.filter(storage_location=location)
+            
+        total_available = sum(b.available_quantity for b in batches_qs)
         
         active_req = gt.requirements.filter(status__in=['PENDING', 'ORDERED']).first()
         
@@ -115,6 +120,9 @@ def get_procurement_forecast():
         # Gather all plans and daily rates
         plans_to_simulate = []
         for assoc in gt.aircraft_associations.all():
+            if location and assoc.aircraft_model.unit.name != location:
+                continue
+                
             for plan in assoc.aircraft_model.flight_plans.all():
                 if not plan.period_start_date or not plan.period_end_date:
                     continue
@@ -139,11 +147,11 @@ def get_procurement_forecast():
                 })
                 fg['total_projected'] += total_consumption
         
-        if not plans_to_simulate:
-            # If no plans, just compute straightforward difference
-            fg['shortfall'] = fg['total_projected'] - fg['total_available']
-            forecast_data.append(fg)
-            continue
+        if not plans_to_simulate and total_available == 0:
+            # If no plans and no stock, nothing to report or shortfall is 0
+            # But we might want to see catalog items? 
+            # Original code included them if forecast_data.append(fg) is called.
+            pass
             
         # The user requested the difference to be just the real difference between stock and projected consumption.
         # We compute the straightforward difference without simulating daily expirations.
@@ -205,18 +213,22 @@ def process_retest_batch(batch, user, form_cleaned_data, old_quantity):
         
     return batch
 
-def calculate_flight_hours_projection(selected_aircraft_ids=None, selected_grease_ids=None):
+def calculate_flight_hours_projection(selected_aircraft_ids=None, selected_grease_ids=None, location=None):
     """
-    Calcula la proyección de horas de vuelo, stock remanente y cuello de botella
-    en base a los consumos y el stock actual.
-    Extraído de FlightHoursCalculatorView (SRP).
+    Calculates flight hours projection based on consumption and available stock.
+    Supports filtering by aircraft, grease types, and unit location.
     """
     from decimal import Decimal
     from .models import AircraftModel, GreaseType
 
     all_aircrafts = AircraftModel.objects.all().order_by('name')
+    if location:
+        all_aircrafts = all_aircrafts.filter(unit__name=location)
+
     if selected_aircraft_ids:
         target_aircrafts = AircraftModel.objects.filter(pk__in=selected_aircraft_ids)
+        if location:
+            target_aircrafts = target_aircrafts.filter(unit__name=location)
     else:
         target_aircrafts = all_aircrafts
 
@@ -246,7 +258,10 @@ def calculate_flight_hours_projection(selected_aircraft_ids=None, selected_greas
             if not any_selected:
                 continue
         nom = gt.nomenclatura
-        avail = sum(b.available_quantity for b in gt.batches.available())
+        batches_qs = gt.batches.available()
+        if location:
+            batches_qs = batches_qs.filter(storage_location=location)
+        avail = sum(b.available_quantity for b in batches_qs)
         stock_by_nom[nom] = stock_by_nom.get(nom, Decimal('0')) + avail
 
     breakdown = []

@@ -1,11 +1,12 @@
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from django.db.models import Sum
+from django.db.models import Sum, F
 from .models import (
     BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetActivity,
     BudgetPPPInc, BudgetPPInc, BudgetPreInc, BudgetIncisosAgrupado,
-    BudgetInc, BudgetPPAI, BudgetCredit, BudgetAllocation, BudgetExecution
+    BudgetInc, BudgetPPAI, BudgetCredit, BudgetAllocation, BudgetExecution,
+    InsufficientFundsError
 )
 
 @transaction.atomic
@@ -51,20 +52,54 @@ def allocate_credit(credit, unit, amount, notes=""):
 
 
 @transaction.atomic
-def register_commitment(allocation, reference_code, amount, commitment_date, user):
+def register_commitment(allocation_id, reference_code, amount, commitment_date, user, external_id=None):
+    """
+    Registra un compromiso con control de concurrencia e idempotencia extrema.
+    Orden de operaciones:
+    1. select_for_update() (Bloqueo de fila)
+    2. Validar saldo
+    3. Intentar crear execution (con manejo de IntegrityError por colisión de external_id)
+    4. Si se creó, actualizar spent_amount atómicamente
+    """
     if amount <= 0:
         raise ValidationError("El monto del compromiso debe ser positivo.")
+
+    # 1. Bloqueamos la fila de la asignación (SELECT FOR UPDATE)
+    allocation = BudgetAllocation.objects.select_for_update().get(pk=allocation_id)
+
     if allocation.credit.fiscal_year.status == 'CLOSED':
         raise ValidationError("No se pueden registrar gastos en un ejercicio cerrado.")
 
-    executed_commitment_total = allocation.executions.aggregate(Sum('commitment_amount'))['commitment_amount__sum'] or 0
-    if executed_commitment_total + amount > allocation.allocated_amount:
-        raise ValidationError(f"Supera el crédito disponible (${allocation.allocated_amount - executed_commitment_total}).")
-        
-    return BudgetExecution.objects.create(
-        allocation=allocation, reference_code=reference_code,
-        commitment_amount=amount, commitment_date=commitment_date, user=user
+    # 2. Validación de saldo disponible
+    available = allocation.allocated_amount - allocation.spent_amount
+    if amount > available:
+        raise InsufficientFundsError(f"Saldo insuficiente. Disponible: ${available:.2f}, Solicitado: ${amount:.2f}")
+
+    # 3. Creación del registro con manejo de colisiones simultáneas
+    try:
+        # Usamos un bloque atomic interno para crear un savepoint. 
+        # Sin esto, un IntegrityError rompería la transacción externa.
+        with transaction.atomic():
+            execution = BudgetExecution.objects.create(
+                allocation=allocation, 
+                reference_code=reference_code,
+                external_id=external_id,
+                commitment_amount=amount, 
+                commitment_date=commitment_date, 
+                user=user
+            )
+    except IntegrityError:
+        # Alguien más creó el registro con el mismo external_id en el microsegundo anterior
+        return BudgetExecution.objects.get(external_id=external_id)
+
+    # 4. SOLO si la creación fue exitosa (no saltamos al except), actualizamos el saldo.
+    # Usamos .filter().update() para asegurar atomicidad máxima y evitar race conditions.
+    BudgetAllocation.objects.filter(pk=allocation.id).update(
+        spent_amount=F('spent_amount') + amount
     )
+    
+    execution.refresh_from_db()
+    return execution
 
 
 @transaction.atomic

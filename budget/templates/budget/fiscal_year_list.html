@@ -32,9 +32,16 @@
                     </td>
                     <td>{{ year.notes|default:"-" }}</td>
                     <td class="text-center">
-                        <button class="btn btn-sm btn-outline-secondary" title="Editar" disabled>
-                            <i class="fa-solid fa-pen"></i>
-                        </button>
+                        <div class="btn-group">
+                            <a href="{% url 'budget:fiscal_year_update' year.pk %}" class="btn btn-sm btn-outline-primary" title="Editar">
+                                <i class="fa-solid fa-pen"></i>
+                            </a>
+                            {% if year.status == 'OPEN' %}
+                                <a href="{% url 'budget:fiscal_year_close' year.pk %}" class="btn btn-sm btn-outline-danger" title="Cerrar Ejercicio">
+                                    <i class="fa-solid fa-lock"></i>
+                                </a>
+                            {% endif %}
+                        </div>
                     </td>
                 </tr>
                 {% empty %}

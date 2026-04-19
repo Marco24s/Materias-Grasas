@@ -1,0 +1,149 @@
+{% extends "budget/base_budget.html" %}
+
+{% block budget_content %}
+<div class="mb-4 animate__animated animate__fadeIn">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'budget:dashboard' %}">Inicio</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'budget:credit_list' %}">Créditos</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Detalles del Crédito</li>
+        </ol>
+    </nav>
+    <div class="d-flex justify-content-between align-items-center">
+        <h2 class="fw-bold mb-0">
+            <i class="fa-solid fa-file-invoice text-primary me-2"></i>
+            Crédito: {{ credit }}
+        </h2>
+        <a href="{% url 'budget:credit_list' %}" class="btn btn-outline-secondary rounded-pill px-4">
+            <i class="fa-solid fa-arrow-left me-2"></i>Volver a la Lista
+        </a>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Resumen de Crédito -->
+    <div class="col-lg-8">
+        <div class="card card-stats p-4 h-100">
+            <h5 class="fw-bold mb-4 border-bottom pb-2">Información de Nomenclador</h5>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="text-muted small d-block">Ejercicio Económico</label>
+                    <span class="fw-bold">{{ credit.fiscal_year.year }}</span>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="text-muted small d-block">Fuente de Financiamiento (FF)</label>
+                    <span class="fw-bold">{{ credit.ff|default:"N/A" }}</span>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="text-muted small d-block">Subprograma</label>
+                    <span class="fw-bold">{{ credit.subprog|default:"N/A" }}</span>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="text-muted small d-block">Inciso / PPAI</label>
+                    <span class="badge bg-primary-subtle text-primary">{{ credit.inc }}-{{ credit.ppai }}</span>
+                </div>
+                <div class="col-12 mb-3">
+                    <label class="text-muted small d-block">Actividad General</label>
+                    <span class="fw-bold">{{ credit.actividad|default:"No especificada" }}</span>
+                </div>
+                {% if credit.notes %}
+                <div class="col-12">
+                    <label class="text-muted small d-block">Observaciones</label>
+                    <p class="text-muted small mb-0 italic">{{ credit.notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards de Totales -->
+    <div class="col-lg-4">
+        <div class="card card-stats p-4 mb-4 bg-primary text-white border-0">
+            <div class="small opacity-75">Crédito Total AA.PP.</div>
+            <h2 class="fw-bold mb-0">${{ credit.total_amount|floatformat:2 }}</h2>
+            <i class="fa-solid fa-vault position-absolute end-0 bottom-0 opacity-25 me-3 mb-3 h1"></i>
+        </div>
+        
+        <div class="card card-stats p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="text-muted small">Distribuido a Unidades</span>
+                <span class="fw-bold text-success">${{ total_allocated|floatformat:2 }}</span>
+            </div>
+            <div class="progress" style="height: 8px;">
+                <div class="progress-bar bg-success" role="progressbar" 
+                     style="width: {% widthratio total_allocated credit.total_amount 100 %}%">
+                </div>
+            </div>
+            <div class="text-end mt-2">
+                <small class="text-muted">Por distribuir: ${{ available_to_allocate|floatformat:2 }}</small>
+            </div>
+        </div>
+
+        <div class="d-grid">
+            <a href="{% url 'budget:allocation_create' %}?credit={{ credit.id }}" class="btn btn-outline-primary rounded-pill py-2 shadow-sm">
+                <i class="fa-solid fa-share-nodes me-2"></i>Nueva Distribución
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de Distribuciones -->
+<div class="card card-stats p-4 animate__animated animate__fadeInUp">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5 class="fw-bold mb-0">Distribución por Unidad Componente (UU.CC.)</h5>
+        {% if execution_percent > 0 %}
+            <span class="badge bg-info-subtle text-info rounded-pill px-3 py-2">
+                Ejecución Global: {{ execution_percent|floatformat:1 }}%
+            </span>
+        {% endif %}
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="bg-light">
+                <tr class="small text-uppercase text-muted">
+                    <th>Unidad Destino</th>
+                    <th class="text-end">Monto Techo</th>
+                    <th class="text-end">Ejecutado (Comp.)</th>
+                    <th class="text-end">Disponible</th>
+                    <th class="text-center">Progreso</th>
+                    <th class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alloc in allocations %}
+                <tr>
+                    <td>
+                        <div class="fw-bold">{{ alloc.unit.name }}</div>
+                        <small class="text-muted">{{ alloc.unit.code|default:"" }}</small>
+                    </td>
+                    <td class="text-end fw-bold">${{ alloc.allocated_amount|floatformat:2 }}</td>
+                    <td class="text-end text-danger">${{ alloc.spent_amount|floatformat:2 }}</td>
+                    <td class="text-end text-success fw-bold">
+                        ${{ alloc.available_amount|floatformat:2 }}
+                    </td>
+                    <td class="text-center" style="width: 150px;">
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-warning" role="progressbar" 
+                                 style="width: {% widthratio alloc.spent_amount alloc.allocated_amount 100 %}%">
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-end">
+                        <a href="{% url 'budget:execution_commitment' %}?allocation={{ alloc.id }}" class="btn btn-sm btn-outline-warning rounded-pill px-2" title="Registrar Gasto">
+                            <i class="fa-solid fa-file-invoice-dollar"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-muted small">
+                        Aún no se han realizado distribuciones de este crédito a ninguna unidad.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

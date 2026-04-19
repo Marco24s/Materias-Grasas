@@ -33,3 +33,13 @@ def abs_val(value):
         return abs(value)
     except TypeError:
         return value
+@register.filter
+def add_decimal_inverse(value, arg):
+    """
+    Substracts the argument from the value (value - arg).
+    Used to calculate shortfalls.
+    """
+    try:
+        return Decimal(str(value)) - Decimal(str(arg))
+    except Exception:
+        return value

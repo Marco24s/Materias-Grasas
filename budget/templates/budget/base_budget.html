@@ -114,6 +114,13 @@
             <i class="fa-solid fa-diagram-project"></i> Distribución
         </a>
 
+        {% if user.is_superuser or user.groups.all.0.name in 'Administrador,Logistica' %}
+        <div class="mt-4 mb-3 px-4 text-muted small text-uppercase fw-bold d-none d-md-block">Configuración</div>
+        <a href="{% url 'budget:nomenclature_dashboard' %}" class="nav-link-sidebar {% if 'nomenclature' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="fa-solid fa-gears"></i> Nomencladores
+        </a>
+        {% endif %}
+
         <div class="mt-4 mb-3 px-4 text-muted small text-uppercase fw-bold d-none d-md-block">Ejecución UU.CC.</div>
         <a href="{% url 'budget:execution_list' %}" class="nav-link-sidebar {% if 'execution' in request.resolver_match.url_name %}active{% endif %}">
             <i class="fa-solid fa-file-invoice-dollar"></i> Gastos / Ejecución
