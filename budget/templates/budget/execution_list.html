@@ -1,4 +1,5 @@
 {% extends "budget/base_budget.html" %}
+{% load l10n %}
 
 {% block budget_content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -31,13 +32,15 @@
                         <small class="text-muted">{{ exec.commitment_date|date:"d/m/Y" }}</small>
                     </td>
                     <td>{{ exec.allocation.unit.name }}</td>
-                    <td><span class="badge bg-secondary opacity-75">{{ exec.allocation.credit.partial_partida.code }}</span></td>
-                    <td class="fw-bold">${{ exec.commitment_amount|floatformat:2 }}</td>
-                    <td class="text-info">${{ exec.accrued_amount|floatformat:2 }}</td>
-                    <td class="text-success">${{ exec.paid_amount|floatformat:2 }}</td>
+                    <td><span class="badge bg-secondary opacity-75">{{ exec.allocation.credit }}</span></td>
+                    <td class="fw-bold">${{ exec.commitment_amount|localize }}</td>
+                    <td class="text-info">${{ exec.accrued_amount|localize }}</td>
+                    <td class="text-success">${{ exec.paid_amount|localize }}</td>
                     <td>
-                        {% if exec.paid_amount == exec.commitment_amount and exec.commitment_amount > 0 %}
+                        {% if exec.paid_amount >= exec.commitment_amount and exec.commitment_amount > 0 %}
                             <span class="badge bg-success rounded-pill">Completado</span>
+                        {% elif exec.paid_amount > 0 %}
+                            <span class="badge bg-success bg-opacity-75 rounded-pill">Pagado</span>
                         {% elif exec.accrued_amount > 0 %}
                             <span class="badge bg-info rounded-pill">Devengado</span>
                         {% else %}
@@ -56,6 +59,11 @@
                             {% elif exec.paid_amount == 0 %}
                             <a href="{% url 'budget:execution_payment' exec.pk %}" class="btn btn-sm btn-outline-success" title="Registrar Pago">
                                 <i class="fa-solid fa-money-bill-wave"></i>
+                            </a>
+                            {% endif %}
+                            {% if request.user.is_superuser %}
+                            <a href="{% url 'budget:execution_delete' exec.pk %}" class="btn btn-sm btn-outline-danger" title="Borrar Físicamente">
+                                <i class="fa-solid fa-trash"></i>
                             </a>
                             {% endif %}
                         </div>

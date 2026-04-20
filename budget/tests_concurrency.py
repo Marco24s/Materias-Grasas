@@ -4,7 +4,7 @@ from django.utils import timezone
 from core.models import Unit
 from budget.models import (
     BudgetFiscalYear, BudgetCredit, BudgetAllocation, BudgetExecution,
-    BudgetInc, BudgetPPAI, BudgetSubprog, BudgetFF, BudgetActivity,
+    BudgetInc, BudgetSubprog, BudgetFF, BudgetProg,
     BudgetPPPInc, BudgetPPInc, BudgetPreInc, BudgetIncisosAgrupado,
     InsufficientFundsError
 )
@@ -26,9 +26,8 @@ class BudgetConcurrencyTest(TransactionTestCase):
         self.year = BudgetFiscalYear.objects.create(year=2026, status='OPEN')
         self.ff = BudgetFF.objects.create(code='11', name='Tesoro')
         self.subprog = BudgetSubprog.objects.create(code='01')
-        self.act = BudgetActivity.objects.create(code='01', name='Act')
+        self.prog = BudgetProg.objects.create(code='01', name='Programa Test')
         self.inc = BudgetInc.objects.create(code='2', name='Bienes')
-        self.ppai = BudgetPPAI.objects.create(code='01')
         
         # Otros campos requeridos por el modelo actual
         self.ppp_inc = BudgetPPPInc.objects.create(code='1')
@@ -38,7 +37,7 @@ class BudgetConcurrencyTest(TransactionTestCase):
 
         self.credit = BudgetCredit.objects.create(
             fiscal_year=self.year, ff=self.ff, subprog=self.subprog, 
-            actividad=self.act, inc=self.inc, ppai=self.ppai,
+            programa=self.prog, inc=self.inc,
             ppp_inc=self.ppp_inc, pp_inc=self.pp_inc, pre_inc=self.pre_inc,
             incisos_agrupado=self.inc_agrup,
             q1_amount=1000, q2_amount=0, q3_amount=0, q4_amount=0

@@ -16,10 +16,12 @@ urlpatterns = [
     path('credits/', views.credit_list, name='credit_list'),
     path('credits/create/', views.credit_create, name='credit_create'),
     path('credits/<int:pk>/detail/', views.credit_detail, name='credit_detail'),
+    path('credits/<int:pk>/delete/', views.credit_delete, name='credit_delete'),
     
     # Distribución (UU.CC.)
     path('allocations/', views.allocation_list, name='allocation_list'),
     path('allocations/create/', views.allocation_create, name='allocation_create'),
+    path('allocations/<int:pk>/delete/', views.allocation_delete, name='allocation_delete'),
     
     # Ejecución (Flujo Secuencial)
     path('executions/', views.execution_list, name='execution_list'),
@@ -27,6 +29,8 @@ urlpatterns = [
     path('executions/<int:pk>/accrual/', views.execution_step_accrual, name='execution_accrual'),
     path('executions/<int:pk>/payment/', views.execution_step_payment, name='execution_payment'),
     path('executions/<int:pk>/detail/', views.execution_detail, name='execution_detail'),
+    path('executions/<int:pk>/release-surplus/', views.execution_release_surplus, name='execution_release_surplus'),
+    path('executions/<int:pk>/delete/', views.execution_delete, name='execution_delete'),
     
     # Configuración / Nomencladores
     path('config/', views.nomenclature_dashboard, name='nomenclature_dashboard'),

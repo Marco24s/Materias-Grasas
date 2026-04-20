@@ -1,19 +1,20 @@
+from django import forms
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.db.models import Sum, F, OuterRef
+from django.db.models import Sum, F, OuterRef, ProtectedError
 from .models import (
-    BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetActivity,
+    BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetProg,
     BudgetPPPInc, BudgetPPInc, BudgetPreInc, BudgetIncisosAgrupado,
-    BudgetInc, BudgetPPAI, BudgetCredit, BudgetAllocation, BudgetExecution,
+    BudgetInc, BudgetCredit, BudgetAllocation, BudgetExecution,
     InsufficientFundsError
 )
 from .forms import (
     BudgetFiscalYearForm, BudgetCreditForm, BudgetAllocationForm,
     BudgetExecutionCommitmentForm, BudgetExecutionAccrualForm, 
     BudgetExecutionPaymentForm,
-    BudgetFFForm, BudgetSubprogForm, BudgetActivityForm,
+    BudgetFFForm, BudgetSubprogForm, BudgetProgForm,
     BudgetPPPIncForm, BudgetPPIncForm, BudgetPreIncForm,
-    BudgetIncisosAgrupadoForm, BudgetIncForm, BudgetPPAIForm
+    BudgetIncisosAgrupadoForm, BudgetIncForm
 )
 from . import services
 
@@ -48,6 +49,31 @@ def dashboard(request):
         stats['total_paid'] = executions.aggregate(Sum('paid_amount'))['paid_amount__sum'] or 0
         stats['available_to_allocate'] = stats['total_credit'] - stats['total_allocated']
         stats['available_to_execute'] = stats['total_allocated'] - stats['total_commitment']
+        
+        # Agregación por trimestre
+        stats['q1_total'] = credits.aggregate(Sum('q1_amount'))['q1_amount__sum'] or 0
+        stats['q2_total'] = credits.aggregate(Sum('q2_amount'))['q2_amount__sum'] or 0
+        stats['q3_total'] = credits.aggregate(Sum('q3_amount'))['q3_amount__sum'] or 0
+        stats['q4_total'] = credits.aggregate(Sum('q4_amount'))['q4_amount__sum'] or 0
+
+        # Cálculo de anchos para la barra de progreso trimestral (basado en compromisos)
+        total_q = stats['total_credit']
+        rem_c = stats['total_commitment']
+        
+        q1_t, q2_t, q3_t, q4_t = stats['q1_total'], stats['q2_total'], stats['q3_total'], stats['q4_total']
+        
+        stats['q1_fill'] = (min(rem_c, q1_t) / q1_t * 100) if q1_t > 0 else 0
+        rem_c = max(0, rem_c - q1_t)
+        stats['q2_fill'] = (min(rem_c, q2_t) / q2_t * 100) if q2_t > 0 else 0
+        rem_c = max(0, rem_c - q2_t)
+        stats['q3_fill'] = (min(rem_c, q3_t) / q3_t * 100) if q3_t > 0 else 0
+        rem_c = max(0, rem_c - q3_t)
+        stats['q4_fill'] = (min(rem_c, q4_t) / q4_t * 100) if q4_t > 0 else 0
+        
+        stats['q1_seg'] = (q1_t / total_q * 100) if total_q > 0 else 0
+        stats['q2_seg'] = (q2_t / total_q * 100) if total_q > 0 else 0
+        stats['q3_seg'] = (q3_t / total_q * 100) if total_q > 0 else 0
+        stats['q4_seg'] = (q4_t / total_q * 100) if total_q > 0 else 0
 
     return render(request, 'budget/dashboard.html', {'fiscal_year': fiscal_year, 'stats': stats, 'unit_report': unit_report, 'is_admin': is_admin(request.user)})
 
@@ -95,7 +121,11 @@ def fiscal_year_close(request, pk):
 
 def credit_list(request):
     if is_admin(request.user):
-        credits = BudgetCredit.objects.all().order_by('inc__code', 'ppai__code')
+        credits = BudgetCredit.objects.all().order_by(
+            'fiscal_year', 'ff', 'programa', 'subprog',
+            'inc__code', 'ppp_inc__code', 'pp_inc__code', 
+            'pre_inc__code', 'incisos_agrupado__code'
+        )
     else:
         credits = BudgetCredit.objects.filter(allocations__unit=request.user.unit).distinct()
     return render(request, 'budget/credit_list.html', {'credits': credits})
@@ -109,10 +139,29 @@ def credit_detail(request, pk):
     total_allocated = allocations.aggregate(Sum('allocated_amount'))['allocated_amount__sum'] or 0
     available_to_allocate = credit.total_amount - total_allocated
     
+    # Calcular anchos para la barra de progreso segmentada
+    total = credit.total_amount
+    q1, q2, q3, q4 = credit.q1_amount, credit.q2_amount, credit.q3_amount, credit.q4_amount
+    
+    rem = total_allocated
+    q1_fill = (min(rem, q1) / q1 * 100) if q1 > 0 else 0
+    rem = max(0, rem - q1)
+    q2_fill = (min(rem, q2) / q2 * 100) if q2 > 0 else 0
+    rem = max(0, rem - q2)
+    q3_fill = (min(rem, q3) / q3 * 100) if q3 > 0 else 0
+    rem = max(0, rem - q3)
+    q4_fill = (min(rem, q4) / q4 * 100) if q4 > 0 else 0
+    
+    # Ancho relativo de cada segmento (trimestre) respecto al total
+    q1_seg = (q1 / total * 100) if total > 0 else 0
+    q2_seg = (q2 / total * 100) if total > 0 else 0
+    q3_seg = (q3 / total * 100) if total > 0 else 0
+    q4_seg = (q4 / total * 100) if total > 0 else 0
+
     # Calculate execution percentage for the whole credit if it's distributed
     total_spent = allocations.aggregate(Sum('spent_amount'))['spent_amount__sum'] or 0
     execution_percent = (total_spent / total_allocated * 100) if total_allocated > 0 else 0
-    
+
     context = {
         'credit': credit,
         'allocations': allocations,
@@ -120,6 +169,8 @@ def credit_detail(request, pk):
         'available_to_allocate': available_to_allocate,
         'total_spent': total_spent,
         'execution_percent': execution_percent,
+        'q_fills': [q1_fill, q2_fill, q3_fill, q4_fill],
+        'q_segs': [q1_seg, q2_seg, q3_seg, q4_seg],
     }
     return render(request, 'budget/credit_detail.html', context)
 
@@ -131,11 +182,14 @@ def credit_create(request):
             try:
                 services.create_credit(
                     fiscal_year=form.cleaned_data['fiscal_year'],
-                    ff=form.cleaned_data['ff'], subprog=form.cleaned_data['subprog'],
-                    actividad=form.cleaned_data['actividad'], ppp_inc=form.cleaned_data['ppp_inc'],
-                    pp_inc=form.cleaned_data['pp_inc'], pre_inc=form.cleaned_data['pre_inc'],
+                    ff=form.cleaned_data['ff'], 
+                    programa=form.cleaned_data['programa'],
+                    subprog=form.cleaned_data['subprog'],
+                    inc=form.cleaned_data['inc'],
+                    ppp_inc=form.cleaned_data['ppp_inc'],
+                    pp_inc=form.cleaned_data['pp_inc'], 
+                    pre_inc=form.cleaned_data['pre_inc'],
                     incisos_agrupado=form.cleaned_data['incisos_agrupado'], 
-                    inc=form.cleaned_data['inc'], ppai=form.cleaned_data['ppai'],
                     q1=form.cleaned_data['q1_amount'], q2=form.cleaned_data['q2_amount'],
                     q3=form.cleaned_data['q3_amount'], q4=form.cleaned_data['q4_amount'],
                     notes=form.cleaned_data['notes']
@@ -147,6 +201,28 @@ def credit_create(request):
     else: form = BudgetCreditForm()
     return render(request, 'budget/form_base.html', {'form': form, 'title': 'Registrar Crédito Presupuestario'})
 
+def credit_delete(request, pk):
+    if not request.user.is_superuser:
+        messages.error(request, "Solo los superusuarios pueden eliminar créditos.")
+        return redirect('budget:credit_list')
+    
+    credit = get_object_or_404(BudgetCredit, pk=pk)
+    
+    if request.method == 'POST':
+        try:
+            credit.delete()
+            messages.success(request, "Crédito presupuestario eliminado exitosamente.")
+            return redirect('budget:credit_list')
+        except ProtectedError:
+            messages.error(request, "No se puede eliminar este crédito porque ya tiene distribuciones asignadas a unidades. Debe eliminar las distribuciones primero.")
+            return redirect('budget:credit_list')
+        
+    return render(request, 'budget/confirm_delete.html', {
+        'object': credit,
+        'title': f"Eliminar Crédito: {credit}",
+        'cancel_url': 'budget:credit_list'
+    })
+
 def allocation_list(request):
     if is_admin(request.user): allocations = BudgetAllocation.objects.all()
     else: allocations = BudgetAllocation.objects.filter(unit=request.user.unit)
@@ -154,17 +230,64 @@ def allocation_list(request):
 
 def allocation_create(request):
     if not is_admin(request.user): return redirect('budget:allocation_list')
+    
+    credit_id = request.GET.get('credit')
+    fixed_credit = None
+    initial = {}
+    
+    if credit_id:
+        fixed_credit = get_object_or_404(BudgetCredit, pk=credit_id)
+        initial['credit'] = fixed_credit.pk
+        
     if request.method == 'POST':
         form = BudgetAllocationForm(request.POST)
         if form.is_valid():
             try:
-                services.allocate_credit(credit=form.cleaned_data['credit'], unit=form.cleaned_data['unit'], amount=form.cleaned_data['allocated_amount'], notes=form.cleaned_data['notes'])
+                services.allocate_credit(
+                    credit=form.cleaned_data['credit'], 
+                    unit=form.cleaned_data['unit'], 
+                    amount=form.cleaned_data['allocated_amount'], 
+                    notes=form.cleaned_data['notes']
+                )
+                if fixed_credit:
+                    return redirect('budget:credit_detail', pk=fixed_credit.pk)
                 return redirect('budget:allocation_list')
             except Exception as e:
                 error_msg = ", ".join(e.messages) if hasattr(e, 'messages') else str(e)
                 messages.error(request, f"Error: {error_msg}")
-    else: form = BudgetAllocationForm()
-    return render(request, 'budget/form_base.html', {'form': form, 'title': 'Distribuir Crédito a Unidad'})
+    else:
+        form = BudgetAllocationForm(initial=initial)
+    
+    if fixed_credit:
+        form.fields['credit'].widget = forms.HiddenInput()
+        
+    return render(request, 'budget/form_base.html', {
+        'form': form, 
+        'title': 'Distribuir Crédito a Unidad',
+        'fixed_credit': fixed_credit
+    })
+
+def allocation_delete(request, pk):
+    if not request.user.is_superuser:
+        messages.error(request, "Solo los superusuarios pueden eliminar distribuciones.")
+        return redirect('budget:allocation_list')
+    
+    allocation = get_object_or_404(BudgetAllocation, pk=pk)
+    
+    if request.method == 'POST':
+        try:
+            allocation.delete()
+            messages.success(request, "Distribución de crédito eliminada exitosamente.")
+            return redirect('budget:allocation_list')
+        except ProtectedError:
+            messages.error(request, "No se puede eliminar esta distribución porque ya tiene gastos (ejecuciones) registrados. Debe eliminar los gastos asociados primero.")
+            return redirect('budget:allocation_list')
+        
+    return render(request, 'budget/confirm_delete.html', {
+        'object': allocation,
+        'title': f"Eliminar Distribución: {allocation}",
+        'cancel_url': 'budget:allocation_list'
+    })
 
 def execution_list(request):
     if is_admin(request.user): executions = BudgetExecution.objects.all()
@@ -174,7 +297,8 @@ def execution_list(request):
 def execution_detail(request, pk):
     execution = get_object_or_404(BudgetExecution, pk=pk)
     if not is_admin(request.user) and execution.allocation.unit != request.user.unit: return redirect('budget:execution_list')
-    return render(request, 'budget/execution_detail.html', {'execution': execution})
+    surplus = execution.commitment_amount - execution.accrued_amount if execution.commitment_amount > execution.accrued_amount else 0
+    return render(request, 'budget/execution_detail.html', {'execution': execution, 'surplus': surplus})
 
 def execution_step_commitment(request):
     if request.method == 'POST':
@@ -236,21 +360,66 @@ def execution_step_payment(request, pk):
                 messages.error(request, f"Error: {error_msg}")
     else: form = BudgetExecutionPaymentForm(instance=execution)
     return render(request, 'budget/form_base.html', {'form': form, 'title': f'Paso 3: Pago ({execution.reference_code})'})
+
+def execution_release_surplus(request, pk):
+    """
+    Controlador para liberar el saldo comprometido de un gasto.
+    """
+    execution = get_object_or_404(BudgetExecution, pk=pk)
+    
+    # Seguridad básica
+    if not is_admin(request.user) and execution.allocation.unit != request.user.unit:
+        messages.error(request, "No tiene permisos para realizar esta acción.")
+        return redirect('budget:execution_detail', pk=pk)
+        
+    try:
+        from . import services
+        execution, surplus = services.release_commitment_surplus(pk, request.user)
+        messages.success(request, f"Se han liberado ${surplus} exitosamente. El monto comprometido ahora coincide con el devengado.")
+    except Exception as e:
+        error_msg = ", ".join(e.messages) if hasattr(e, 'messages') else str(e)
+        messages.error(request, f"No se pudo liberar el saldo: {error_msg}")
+        
+    return redirect('budget:execution_detail', pk=pk)
+
+def execution_delete(request, pk):
+    if not request.user.is_superuser:
+        messages.error(request, "Acceso denegado. Solo los superusuarios pueden borrar ejecuciones.")
+        return redirect('budget:execution_list')
+        
+    execution = get_object_or_404(BudgetExecution, pk=pk)
+    
+    if request.method == 'POST':
+        try:
+            from . import services
+            amount = services.delete_execution(pk, request.user)
+            messages.success(request, f"Ejecución borrada exitosamente. Se restituyeron ${amount} al crédito de la unidad.")
+            return redirect('budget:execution_list')
+        except Exception as e:
+            messages.error(request, f"Error al borrar: {str(e)}")
+            return redirect('budget:execution_detail', pk=pk)
+            
+    return render(request, 'budget/confirm_delete.html', {
+        'object': execution,
+        'title': f"Borrar Ejecución: {execution.reference_code}",
+        'cancel_url': 'budget:execution_list'
+    })
+
 # --- Gestión de Nomencladores (Configuración) ---
+
 
 def nomenclature_dashboard(request):
     if not is_admin(request.user): return redirect('budget:dashboard')
     
     catalogs = [
         {'id': 'ff', 'name': 'Fuentes de Financiamiento (FF)', 'model': BudgetFF, 'icon': 'fa-money-bill'},
+        {'id': 'program', 'name': 'Programas', 'model': BudgetProg, 'icon': 'fa-tasks'},
         {'id': 'subprog', 'name': 'Subprogramas', 'model': BudgetSubprog, 'icon': 'fa-diagram-project'},
-        {'id': 'activity', 'name': 'Actividades Generales', 'model': BudgetActivity, 'icon': 'fa-tasks'},
-        {'id': 'inc', 'name': 'Incisos Principales', 'model': BudgetInc, 'icon': 'fa-folder-open'},
-        {'id': 'ppai', 'name': 'PPAIs (Objetos de Gasto)', 'model': BudgetPPAI, 'icon': 'fa-tag'},
-        {'id': 'pppinc', 'name': 'PPP-INC', 'model': BudgetPPPInc, 'icon': 'fa-list-ol'},
-        {'id': 'ppinc', 'name': 'PP-INC', 'model': BudgetPPInc, 'icon': 'fa-list-ol'},
-        {'id': 'preinc', 'name': 'Pre-incisos', 'model': BudgetPreInc, 'icon': 'fa-list-ol'},
-        {'id': 'inc_agrup', 'name': 'Incisos Agrupados / Otros', 'model': BudgetIncisosAgrupado, 'icon': 'fa-boxes-stacked'},
+        {'id': 'inc', 'name': 'INCISOs', 'model': BudgetInc, 'icon': 'fa-folder-open'},
+        {'id': 'pppinc', 'name': 'PPALs', 'model': BudgetPPPInc, 'icon': 'fa-list-ol'},
+        {'id': 'ppinc', 'name': 'PARCIALes', 'model': BudgetPPInc, 'icon': 'fa-list-ol'},
+        {'id': 'preinc', 'name': 'SUBPCs', 'model': BudgetPreInc, 'icon': 'fa-list-ol'},
+        {'id': 'inc_agrup', 'name': 'MONEDAs', 'model': BudgetIncisosAgrupado, 'icon': 'fa-boxes-stacked'},
     ]
     
     # Add counts to each catalog
@@ -341,13 +510,12 @@ def nomenclature_delete(request, catalog_type, pk):
 def _get_catalog_config(catalog_type):
     configs = {
         'ff': {'id': 'ff', 'model': BudgetFF, 'form_class': BudgetFFForm, 'name': 'Fuentes de Financiamiento'},
+        'program': {'id': 'program', 'model': BudgetProg, 'form_class': BudgetProgForm, 'name': 'Programas'},
         'subprog': {'id': 'subprog', 'model': BudgetSubprog, 'form_class': BudgetSubprogForm, 'name': 'Subprogramas'},
-        'activity': {'id': 'activity', 'model': BudgetActivity, 'form_class': BudgetActivityForm, 'name': 'Actividades Generales'},
-        'pppinc': {'id': 'pppinc', 'model': BudgetPPPInc, 'form_class': BudgetPPPIncForm, 'name': 'PPP-INC'},
-        'ppinc': {'id': 'ppinc', 'model': BudgetPPInc, 'form_class': BudgetPPIncForm, 'name': 'PP-INC'},
-        'preinc': {'id': 'preinc', 'model': BudgetPreInc, 'form_class': BudgetPreIncForm, 'name': 'Pre-incisos'},
-        'inc_agrup': {'id': 'inc_agrup', 'model': BudgetIncisosAgrupado, 'form_class': BudgetIncisosAgrupadoForm, 'name': 'Incisos Agrupados'},
-        'inc': {'id': 'inc', 'model': BudgetInc, 'form_class': BudgetIncForm, 'name': 'Incisos'},
-        'ppai': {'id': 'ppai', 'model': BudgetPPAI, 'form_class': BudgetPPAIForm, 'name': 'PPAIs'},
+        'pppinc': {'id': 'pppinc', 'model': BudgetPPPInc, 'form_class': BudgetPPPIncForm, 'name': 'PPALs'},
+        'ppinc': {'id': 'ppinc', 'model': BudgetPPInc, 'form_class': BudgetPPIncForm, 'name': 'PARCIALes'},
+        'preinc': {'id': 'preinc', 'model': BudgetPreInc, 'form_class': BudgetPreIncForm, 'name': 'SUBPCs'},
+        'inc_agrup': {'id': 'inc_agrup', 'model': BudgetIncisosAgrupado, 'form_class': BudgetIncisosAgrupadoForm, 'name': 'MONEDAs'},
+        'inc': {'id': 'inc', 'model': BudgetInc, 'form_class': BudgetIncForm, 'name': 'INCISOs'},
     }
     return configs.get(catalog_type)
