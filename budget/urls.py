@@ -15,6 +15,9 @@ urlpatterns = [
     # Créditos (AA.PP.)
     path('credits/', views.credit_list, name='credit_list'),
     path('credits/create/', views.credit_create, name='credit_create'),
+    path('credits/assign-types/', views.credit_bulk_type, name='credit_bulk_type'),
+    path('credits/type-log/', views.credit_type_log, name='credit_type_log'),
+    path('credits/<int:pk>/unassign-type/', views.credit_unassign_type, name='credit_unassign_type'),
     path('credits/<int:pk>/detail/', views.credit_detail, name='credit_detail'),
     path('credits/<int:pk>/delete/', views.credit_delete, name='credit_delete'),
     
@@ -38,4 +41,12 @@ urlpatterns = [
     path('config/<str:catalog_type>/add/', views.nomenclature_create, name='nomenclature_create'),
     path('config/<str:catalog_type>/<int:pk>/edit/', views.nomenclature_update, name='nomenclature_update'),
     path('config/<str:catalog_type>/<int:pk>/delete/', views.nomenclature_delete, name='nomenclature_delete'),
+    
+    # Clasificaciones Personalizadas
+    path('classifications/', views.classification_list, name='classification_list'),
+    path('classifications/create/', views.classification_create, name='classification_create'),
+    path('classifications/<int:pk>/edit/', views.classification_update, name='classification_update'),
+    path('classifications/<int:pk>/delete/', views.classification_delete, name='classification_delete'),
+    path('classifications/<int:pk>/assign/', views.classification_assign, name='classification_assign'),
+    path('classifications/<int:pk>/detail/', views.classification_detail, name='classification_detail'),
 ]

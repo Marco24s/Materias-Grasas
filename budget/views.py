@@ -1,12 +1,13 @@
 from django import forms
 from django.shortcuts import render, redirect, get_object_or_404
+from decimal import Decimal
 from django.contrib import messages
 from django.db.models import Sum, F, OuterRef, ProtectedError
 from .models import (
     BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetProg,
     BudgetPPPInc, BudgetPPInc, BudgetPreInc, BudgetIncisosAgrupado,
     BudgetInc, BudgetCredit, BudgetAllocation, BudgetExecution,
-    InsufficientFundsError
+    BudgetClassification, BudgetCreditType, BudgetCreditTypeLog, InsufficientFundsError
 )
 from .forms import (
     BudgetFiscalYearForm, BudgetCreditForm, BudgetAllocationForm,
@@ -14,7 +15,9 @@ from .forms import (
     BudgetExecutionPaymentForm,
     BudgetFFForm, BudgetSubprogForm, BudgetProgForm,
     BudgetPPPIncForm, BudgetPPIncForm, BudgetPreIncForm,
-    BudgetIncisosAgrupadoForm, BudgetIncForm
+    BudgetIncisosAgrupadoForm, BudgetIncForm,
+    BudgetClassificationForm, BudgetClassificationAssignForm,
+    BudgetCreditTypeForm
 )
 from . import services
 
@@ -74,6 +77,14 @@ def dashboard(request):
         stats['q2_seg'] = (q2_t / total_q * 100) if total_q > 0 else 0
         stats['q3_seg'] = (q3_t / total_q * 100) if total_q > 0 else 0
         stats['q4_seg'] = (q4_t / total_q * 100) if total_q > 0 else 0
+
+        # Desglose por Tipo de Crédito
+        stats['credit_by_type'] = (
+            credits.filter(credit_type__isnull=False)
+            .values('credit_type__name', 'credit_type__code')
+            .annotate(subtotal=Sum('total_amount'))
+            .order_by('credit_type__code')
+        )
 
     return render(request, 'budget/dashboard.html', {'fiscal_year': fiscal_year, 'stats': stats, 'unit_report': unit_report, 'is_admin': is_admin(request.user)})
 
@@ -222,6 +233,80 @@ def credit_delete(request, pk):
         'title': f"Eliminar Crédito: {credit}",
         'cancel_url': 'budget:credit_list'
     })
+
+def credit_bulk_type(request):
+    """Allows bulk assignment of CreditType to existing credits from a single table."""
+    if not is_admin(request.user): return redirect('budget:credit_list')
+
+    fiscal_year = BudgetFiscalYear.objects.filter(status='OPEN').first()
+    credits = BudgetCredit.objects.filter(fiscal_year=fiscal_year).select_related('credit_type', 'ff', 'fiscal_year').order_by('ff__code') if fiscal_year else []
+    credit_types = BudgetCreditType.objects.all().order_by('code')
+
+    if request.method == 'POST':
+        updated = 0
+        for credit in credits:
+            key = f'type_{credit.pk}'
+            type_id = request.POST.get(key)
+            new_type = BudgetCreditType.objects.filter(pk=type_id).first() if type_id else None
+            if credit.credit_type != new_type:
+                # Determine action for the log
+                if credit.credit_type is None:
+                    action = BudgetCreditTypeLog.ACTION_ASSIGN
+                elif new_type is None:
+                    action = BudgetCreditTypeLog.ACTION_UNASSIGN
+                else:
+                    action = BudgetCreditTypeLog.ACTION_CHANGE
+
+                BudgetCreditTypeLog.objects.create(
+                    credit=credit,
+                    action=action,
+                    previous_type=credit.credit_type,
+                    new_type=new_type,
+                    user=request.user
+                )
+                credit.credit_type = new_type
+                credit.save(update_fields=['credit_type'])
+                updated += 1
+        messages.success(request, f"Se actualizaron {updated} crédito(s). Los cambios quedaron registrados en el historial.")
+        return redirect('budget:credit_list')
+
+    return render(request, 'budget/credit_bulk_type.html', {
+        'credits': credits,
+        'credit_types': credit_types,
+        'fiscal_year': fiscal_year
+    })
+
+def credit_unassign_type(request, pk):
+    """Removes the credit_type from a single credit with an optional reason, logging the event."""
+    if not is_admin(request.user): return redirect('budget:credit_list')
+    credit = get_object_or_404(BudgetCredit, pk=pk)
+    
+    if not credit.credit_type:
+        messages.warning(request, "Este crédito ya no tiene un tipo asignado.")
+        return redirect('budget:credit_list')
+    
+    if request.method == 'POST':
+        notes = request.POST.get('notes', '').strip()
+        BudgetCreditTypeLog.objects.create(
+            credit=credit,
+            action=BudgetCreditTypeLog.ACTION_UNASSIGN,
+            previous_type=credit.credit_type,
+            new_type=None,
+            user=request.user,
+            notes=notes or None
+        )
+        credit.credit_type = None
+        credit.save(update_fields=['credit_type'])
+        messages.success(request, f"Tipo de crédito removido de {credit}. El evento quedó registrado.")
+        return redirect('budget:credit_list')
+
+    return render(request, 'budget/credit_unassign_confirm.html', {'credit': credit})
+
+def credit_type_log(request):
+    """Shows the full audit log of credit type assignment changes."""
+    if not is_admin(request.user): return redirect('budget:dashboard')
+    logs = BudgetCreditTypeLog.objects.all().select_related('credit', 'previous_type', 'new_type', 'user').order_by('-timestamp')
+    return render(request, 'budget/credit_type_log.html', {'logs': logs})
 
 def allocation_list(request):
     if is_admin(request.user): allocations = BudgetAllocation.objects.all()
@@ -420,6 +505,7 @@ def nomenclature_dashboard(request):
         {'id': 'ppinc', 'name': 'PARCIALes', 'model': BudgetPPInc, 'icon': 'fa-list-ol'},
         {'id': 'preinc', 'name': 'SUBPCs', 'model': BudgetPreInc, 'icon': 'fa-list-ol'},
         {'id': 'inc_agrup', 'name': 'MONEDAs', 'model': BudgetIncisosAgrupado, 'icon': 'fa-boxes-stacked'},
+        {'id': 'credit_type', 'name': 'Tipos de Crédito', 'model': BudgetCreditType, 'icon': 'fa-tags'},
     ]
     
     # Add counts to each catalog
@@ -517,5 +603,133 @@ def _get_catalog_config(catalog_type):
         'preinc': {'id': 'preinc', 'model': BudgetPreInc, 'form_class': BudgetPreIncForm, 'name': 'SUBPCs'},
         'inc_agrup': {'id': 'inc_agrup', 'model': BudgetIncisosAgrupado, 'form_class': BudgetIncisosAgrupadoForm, 'name': 'MONEDAs'},
         'inc': {'id': 'inc', 'model': BudgetInc, 'form_class': BudgetIncForm, 'name': 'INCISOs'},
+        'credit_type': {'id': 'credit_type', 'model': BudgetCreditType, 'form_class': BudgetCreditTypeForm, 'name': 'Tipos de Crédito'},
     }
     return configs.get(catalog_type)
+
+# --- Clasificaciones Personalizadas ---
+
+def classification_list(request):
+    classes = BudgetClassification.objects.annotate(
+        total_assigned=Sum('credits__total_amount')
+    ).order_by('name')
+    
+    grand_total = sum((c.total_assigned or Decimal('0')) for c in classes)
+    
+    return render(request, 'budget/classification_list.html', {
+        'classes': classes,
+        'grand_total': grand_total
+    })
+
+def classification_create(request):
+    if request.method == 'POST':
+        form = BudgetClassificationForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Clasificación creada.")
+            return redirect('budget:classification_list')
+    else:
+        form = BudgetClassificationForm()
+    return render(request, 'budget/form_base.html', {'form': form, 'title': 'Nueva Clasificación'})
+
+def classification_update(request, pk):
+    c = get_object_or_404(BudgetClassification, pk=pk)
+    if request.method == 'POST':
+        form = BudgetClassificationForm(request.POST, instance=c)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Clasificación actualizada.")
+            return redirect('budget:classification_list')
+    else:
+        form = BudgetClassificationForm(instance=c)
+    return render(request, 'budget/form_base.html', {'form': form, 'title': f'Editar Clasificación: {c.name}'})
+
+def classification_delete(request, pk):
+    c = get_object_or_404(BudgetClassification, pk=pk)
+    if request.method == 'POST':
+        c.delete()
+        messages.success(request, "Clasificación eliminada.")
+        return redirect('budget:classification_list')
+    return render(request, 'budget/confirm_delete.html', {
+        'object': c, 
+        'title': f'Eliminar Clasificación: {c.name}',
+        'cancel_url': 'budget:classification_list'
+    })
+
+def classification_assign(request, pk):
+    c = get_object_or_404(BudgetClassification, pk=pk)
+    if request.method == 'POST':
+        form = BudgetClassificationAssignForm(request.POST, classification=c)
+        if form.is_valid():
+            selected_credits = form.cleaned_data['credits']
+            
+            # Remove this classification from any credits that aren't selected anymore
+            c.credits.exclude(id__in=selected_credits).update(custom_class=None)
+            
+            # Assing this classification to the selected credits
+            for credit in selected_credits:
+                credit.custom_class = c
+                credit.save(update_fields=['custom_class'])
+                
+            messages.success(request, f"Créditos asignados a {c.name}.")
+            return redirect('budget:classification_list')
+    else:
+        form = BudgetClassificationAssignForm(classification=c)
+        
+    return render(request, 'budget/classification_assign.html', {'form': form, 'classification': c})
+
+def classification_detail(request, pk):
+    classification = get_object_or_404(BudgetClassification, pk=pk)
+    credits = classification.credits.all().select_related(
+        'fiscal_year', 'ff', 'programa', 'subprog', 'inc', 'ppp_inc', 'pp_inc', 'pre_inc'
+    )
+    
+    total_assigned = Decimal('0')
+    total_allocated = Decimal('0')
+    total_spent = Decimal('0')
+    total_accrued = Decimal('0')
+    total_paid = Decimal('0')
+    
+    credit_details = []
+    
+    for cr in credits:
+        allocated = BudgetAllocation.objects.filter(credit=cr).aggregate(Sum('allocated_amount'))['allocated_amount__sum'] or Decimal('0')
+        spent = BudgetAllocation.objects.filter(credit=cr).aggregate(Sum('spent_amount'))['spent_amount__sum'] or Decimal('0')
+        
+        execs_stats = BudgetExecution.objects.filter(allocation__credit=cr).aggregate(
+            t_accrued=Sum('accrued_amount'),
+            t_paid=Sum('paid_amount')
+        )
+        accrued = execs_stats['t_accrued'] or Decimal('0')
+        paid = execs_stats['t_paid'] or Decimal('0')
+        
+        total_assigned += cr.total_amount
+        total_allocated += allocated
+        total_spent += spent
+        total_accrued += accrued
+        total_paid += paid
+        
+        credit_details.append({
+            'credit': cr,
+            'allocated': allocated,
+            'spent': spent,
+            'accrued': accrued,
+            'paid': paid,
+        })
+        
+    stats = {
+        'total_assigned': total_assigned,
+        'total_allocated': total_allocated,
+        'total_spent': total_spent,
+        'total_accrued': total_accrued,
+        'total_paid': total_paid,
+        'available_to_allocate': total_assigned - total_allocated,
+        'available_to_execute': total_allocated - total_spent
+    }
+
+    return render(request, 'budget/classification_detail.html', {
+        'classification': classification,
+        'stats': stats,
+        'credit_details': credit_details
+    })
+

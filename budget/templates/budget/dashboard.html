@@ -38,8 +38,34 @@
                             <h3 class="fw-bold mb-0">${{ stats.total_credit|floatformat:2 }}</h3>
                         </div>
                     </div>
+                    {% if stats.credit_by_type %}
+                    <hr class="my-2 opacity-25">
+                    <div class="small">
+                        {% for row in stats.credit_by_type %}
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted">
+                                <i class="fa-solid fa-tag fa-xs me-1 text-primary opacity-50"></i>
+                                {{ row.credit_type__name }}
+                            </span>
+                            <span class="fw-bold">${{ row.subtotal|floatformat:2 }}</span>
+                        </div>
+                        {% if stats.total_credit > 0 %}
+                        <div class="progress mb-2" style="height: 3px;">
+                            <div class="progress-bar bg-primary" style="width: {% widthratio row.subtotal stats.total_credit 100 %}%"></div>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                        {% if stats.credit_by_type|length > 1 %}
+                        <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
+                            <span class="fw-bold text-muted">TOTAL:</span>
+                            <span class="fw-bold text-primary">${{ stats.total_credit|floatformat:2 }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
+
             <div class="col-md-6">
                 <div class="card card-stats h-100 p-3">
                     <div class="d-flex align-items-center mb-3">
@@ -123,6 +149,9 @@
                 </a>
                 <a href="{% url 'budget:allocation_create' %}" class="btn btn-outline-dark btn-sm text-start py-2">
                    <i class="fa-solid fa-share-nodes me-2"></i> Distribuir a Unidad
+                </a>
+                <a href="{% url 'budget:classification_list' %}" class="btn btn-outline-info btn-sm text-start py-2 mt-2 border-2 text-dark">
+                    <i class="fa-solid fa-umbrella text-info me-2"></i> <strong>Mis Clasificaciones</strong> Especiales
                 </a>
             </div>
         </div>

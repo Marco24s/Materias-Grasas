@@ -4,9 +4,17 @@
 {% block budget_content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="fw-bold"><i class="fa-solid fa-list-check me-2 text-primary"></i>Créditos Presupuestarios (AA.PP.)</h2>
-    <a href="{% url 'budget:credit_create' %}" class="btn btn-primary rounded-pill px-4 shadow-sm">
-        <i class="fa-solid fa-plus me-2"></i>Registrar Nuevo Crédito
-    </a>
+    <div class="d-flex gap-2">
+        <a href="{% url 'budget:credit_type_log' %}" class="btn btn-outline-secondary rounded-pill px-4">
+            <i class="fa-solid fa-clock-rotate-left me-2"></i>Historial
+        </a>
+        <a href="{% url 'budget:credit_bulk_type' %}" class="btn btn-outline-primary rounded-pill px-4">
+            <i class="fa-solid fa-tags me-2"></i>Asignar Tipos en Masa
+        </a>
+        <a href="{% url 'budget:credit_create' %}" class="btn btn-primary rounded-pill px-4 shadow-sm">
+            <i class="fa-solid fa-plus me-2"></i>Registrar Nuevo Crédito
+        </a>
+    </div>
 </div>
 
 <div class="card card-stats border-0 shadow-sm overflow-hidden">
@@ -24,6 +32,7 @@
                     <th>Subpc</th>
                     <th>Moneda</th>
                     <th class="text-end">Monto Total</th>
+                    <th class="text-center">Tipo</th>
                     <th class="text-end pe-4">Acciones</th>
                 </tr>
             </thead>
@@ -48,14 +57,26 @@
                     <td class="text-end fw-bold text-dark">
                         ${{ credit.total_amount|localize }}
                     </td>
+                    <td class="text-center">
+                        {% if credit.credit_type %}
+                        <span class="badge bg-primary rounded-pill small">{{ credit.credit_type.code }}</span>
+                        {% else %}
+                        <span class="text-muted small">—</span>
+                        {% endif %}
+                    </td>
                     <td class="text-end pe-4">
                         <div class="btn-group">
                             <a href="{% url 'budget:allocation_create' %}?credit={{ credit.id }}" class="btn btn-sm btn-outline-success rounded-pill px-2 me-1" title="Distribuir a Unidad">
                                 <i class="fa-solid fa-share-nodes"></i>
                             </a>
-                            <a href="{% url 'budget:credit_detail' credit.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-2 {% if user.is_superuser %}me-1{% endif %}" title="Ver Detalles">
+                            <a href="{% url 'budget:credit_detail' credit.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-2 me-1" title="Ver Detalles">
                                 <i class="fa-solid fa-eye"></i>
                             </a>
+                            {% if credit.credit_type %}
+                            <a href="{% url 'budget:credit_unassign_type' credit.id %}" class="btn btn-sm btn-outline-warning rounded-pill px-2 me-1" title="Desasignar Tipo">
+                                <i class="fa-solid fa-link-slash"></i>
+                            </a>
+                            {% endif %}
                             {% if user.is_superuser %}
                             <a href="{% url 'budget:credit_delete' credit.id %}" class="btn btn-sm btn-outline-danger rounded-pill px-2" title="Eliminar Crédito">
                                 <i class="fa-solid fa-trash"></i>

@@ -18,6 +18,12 @@ class BudgetFF(models.Model):
     class Meta: verbose_name = "Fuente"; verbose_name_plural = "Fuentes"
     def __str__(self): return f"{self.code} - {self.name}" if self.name else self.code
 
+class BudgetCreditType(models.Model):
+    code = models.CharField(max_length=20, unique=True, verbose_name="Código")
+    name = models.CharField(max_length=150, verbose_name="Nombre / Descripción")
+    class Meta: verbose_name = "Tipo de Crédito"; verbose_name_plural = "Tipos de Crédito"
+    def __str__(self): return f"{self.code} - {self.name}"
+
 class BudgetSubprog(models.Model):
     code = models.CharField(max_length=10, unique=True, verbose_name="Código SUBPROG")
     name = models.CharField(max_length=100, verbose_name="Descripción SUBPROG", blank=True)
@@ -61,8 +67,22 @@ class BudgetInc(models.Model):
     def __str__(self): return f"{self.code} - {self.name}" if self.name else self.code
 
 
+class BudgetClassification(models.Model):
+    name = models.CharField(max_length=100, unique=True, verbose_name="Nombre de la Clasificación")
+    notes = models.TextField(blank=True, null=True, verbose_name="Descripción / Notas")
+    
+    class Meta:
+        verbose_name = "Clasificación Personalizada"
+        verbose_name_plural = "Clasificaciones Personalizadas"
+        
+    def __str__(self):
+        return self.name
+
+
 class BudgetCredit(models.Model):
     fiscal_year = models.ForeignKey(BudgetFiscalYear, on_delete=models.PROTECT, related_name="credits", verbose_name="Ejercicio")
+    custom_class = models.ForeignKey(BudgetClassification, on_delete=models.SET_NULL, null=True, blank=True, related_name='credits', verbose_name="Clasificación Especial")
+    credit_type = models.ForeignKey(BudgetCreditType, on_delete=models.PROTECT, null=True, blank=True, related_name='credits', verbose_name="Tipo de Crédito")
     ff = models.ForeignKey(BudgetFF, on_delete=models.PROTECT, verbose_name="FF", null=True, blank=True)
     programa = models.ForeignKey(BudgetProg, on_delete=models.PROTECT, verbose_name="Programa", null=True, blank=True)
     subprog = models.ForeignKey(BudgetSubprog, on_delete=models.PROTECT, verbose_name="SUBPROG", null=True, blank=True)
@@ -130,3 +150,30 @@ class BudgetExecution(models.Model):
         verbose_name = "Ejecución Presupuestaria"
         verbose_name_plural = "Ejecuciones Presupuestarias"
     def __str__(self): return self.reference_code
+
+
+class BudgetCreditTypeLog(models.Model):
+    ACTION_ASSIGN = 'ASSIGN'
+    ACTION_UNASSIGN = 'UNASSIGN'
+    ACTION_CHANGE = 'CHANGE'
+    ACTION_CHOICES = [
+        (ACTION_ASSIGN, 'Asignación'),
+        (ACTION_UNASSIGN, 'Desasignación'),
+        (ACTION_CHANGE, 'Cambio de Tipo'),
+    ]
+
+    credit = models.ForeignKey(BudgetCredit, on_delete=models.CASCADE, related_name='type_logs', verbose_name="Crédito")
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES, verbose_name="Acción")
+    previous_type = models.ForeignKey(BudgetCreditType, on_delete=models.SET_NULL, null=True, blank=True, related_name='unassigned_logs', verbose_name="Tipo Anterior")
+    new_type = models.ForeignKey(BudgetCreditType, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_logs', verbose_name="Tipo Nuevo")
+    user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, verbose_name="Realizado por")
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="Fecha y Hora")
+    notes = models.TextField(blank=True, null=True, verbose_name="Motivo / Observaciones")
+
+    class Meta:
+        verbose_name = "Registro de Cambio de Tipo"
+        verbose_name_plural = "Registros de Cambios de Tipo"
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.get_action_display()} — {self.credit} ({self.timestamp.strftime('%d/%m/%Y %H:%M')})"
