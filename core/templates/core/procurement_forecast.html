@@ -34,7 +34,17 @@
                         </a>
                     </td>
                     <td><small class="text-muted">Múltiples Pres. ({{ row.grease_type.unidad }})</small></td>
-                    <td class="text-end">{{ row.total_available|smart_number }} <small class="text-muted">{{ row.grease_type.unidad }}</small></td>
+                    <td class="text-end">
+                        <span {% if row.stock_breakdown %}
+                            data-bs-toggle="tooltip" 
+                            data-bs-placement="top" 
+                            data-bs-html="true"
+                            title="<div class='text-start'>{% for item in row.stock_breakdown %}• {{ item.location }}: <b>{{ item.quantity|smart_number }}</b>{% if not forloop.last %}<br>{% endif %}{% endfor %}</div>" 
+                            style="cursor: help; border-bottom: 1px dotted #6c757d;"
+                            {% endif %}>
+                            {{ row.total_available|smart_number }}
+                        </span> <small class="text-muted">{{ row.grease_type.unidad }}</small>
+                    </td>
                     <td class="text-end">{{ row.total_projected|smart_number }} <small class="text-muted">{{ row.grease_type.unidad }}</small></td>
                     <td class="text-end">
                         <span class="badge {% if row.shortfall > 0 %}bg-danger{% else %}bg-success{% endif %} fs-6">

@@ -10,10 +10,10 @@
 
 <div class="card card-stats border-0 shadow-sm overflow-hidden">
     <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
+        <table class="table table-hover align-middle mb-0 table-compact">
             <thead class="bg-light">
                 <tr class="small text-uppercase text-muted border-bottom-0">
-                    <th class="ps-4">FF</th>
+                    <th class="ps-4" style="width: 80px;">FF</th>
                     <th>SUBPROG</th>
                     <th>ACT. GENERAL</th>
                     <th>INC-PPAI</th>
@@ -26,30 +26,32 @@
                 {% for credit in credits %}
                 <tr>
                     <td class="ps-4">
-                        <span class="badge bg-secondary-subtle text-secondary px-2 py-1">{{ credit.ff }}</span>
+                        <span class="badge bg-secondary-subtle text-secondary px-2 py-1">{{ credit.ff.code }}</span>
                     </td>
-                    <td><span class="fw-bold">{{ credit.subprog }}</span></td>
-                    <td style="max-width: 250px;">
-                        <div class="text-truncate" title="{{ credit.actividad }}">{{ credit.actividad }}</div>
-                        <small class="text-muted">{{ credit.ppp_inc }} / {{ credit.pp_inc }}</small>
+                    <td><span class="fw-bold">{{ credit.subprog.code }}</span></td>
+                    <td style="max-width: 200px;">
+                        <div class="text-truncate fw-semibold" title="{{ credit.actividad }}" style="font-size: 0.8rem;">{{ credit.actividad }}</div>
+                        <small class="text-muted" style="font-size: 0.7rem;">{{ credit.ppp_inc.code }} / {{ credit.pp_inc.code }}</small>
                     </td>
                     <td>
-                        <div class="fw-bold text-primary">{{ credit.inc }}-{{ credit.ppai }}</div>
-                        <small class="text-muted">{{ credit.pre_inc }}</small>
+                        <div class="fw-bold text-primary">{{ credit.inc.code|default:"--" }}-{{ credit.ppai.code|default:"000" }}</div>
+                        <small class="text-muted" style="font-size: 0.7rem;">{{ credit.pre_inc.code|default:"" }}</small>
                     </td>
-                    <td class="text-end fw-bold text-dark">
+                    <td class="text-end fw-bold text-dark" style="white-space: nowrap;">
                         ${{ credit.total_amount|floatformat:2 }}
                     </td>
-                    <td class="text-center" style="min-width: 150px;">
-                        <small class="text-muted d-block mb-1">T1: ${{ credit.q1_amount|floatformat:0 }} | T2: ${{ credit.q2_amount|floatformat:0 }}</small>
-                        <small class="text-muted d-block">T3: ${{ credit.q3_amount|floatformat:0 }} | T4: ${{ credit.q4_amount|floatformat:0 }}</small>
+                    <td class="text-center" style="min-width: 120px; white-space: nowrap;">
+                        <div class="d-flex flex-column" style="font-size: 0.73rem; line-height: 1.2;">
+                            <span><strong class="text-dark">T1:</strong> ${{ credit.q1_amount|floatformat:0 }} <strong class="text-dark ms-2">T2:</strong> ${{ credit.q2_amount|floatformat:0 }}</span>
+                            <span class="mt-1"><strong class="text-dark">T3:</strong> ${{ credit.q3_amount|floatformat:0 }} <strong class="text-dark ms-2">T4:</strong> ${{ credit.q4_amount|floatformat:0 }}</span>
+                        </div>
                     </td>
-                    <td class="text-end pe-4">
+                    <td class="text-end pe-4" style="width: 100px;">
                         <div class="btn-group">
-                            <a href="{% url 'budget:allocation_create' %}?credit={{ credit.id }}" class="btn btn-sm btn-outline-success rounded-pill px-2 me-1" title="Distribuir a Unidad">
+                            <a href="{% url 'budget:allocation_create' %}?credit={{ credit.id }}" class="btn btn-sm btn-outline-success px-2 me-1" title="Distribuir a Unidad">
                                 <i class="fa-solid fa-share-nodes"></i>
                             </a>
-                            <a href="{% url 'budget:credit_detail' credit.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-2" title="Ver Detalles">
+                            <a href="{% url 'budget:credit_detail' credit.id %}" class="btn btn-sm btn-outline-secondary px-2" title="Ver Detalles">
                                 <i class="fa-solid fa-eye"></i>
                             </a>
                         </div>

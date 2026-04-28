@@ -101,3 +101,28 @@ body {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
 }
+
+/* --- Compact Table Styles --- */
+.table-compact {
+    font-size: 0.85rem;
+}
+
+.table-compact th {
+    font-weight: 700;
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+    color: #64748b;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+}
+
+.table-compact td {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+}
+
+.table-compact .badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}

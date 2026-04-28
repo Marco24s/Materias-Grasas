@@ -85,16 +85,19 @@ class BudgetCreditForm(forms.ModelForm):
             'notes': 'Observaciones'
         }
         widgets = {
-            'q1_amount': forms.NumberInput(attrs={'step': '0.01'}),
-            'q2_amount': forms.NumberInput(attrs={'step': '0.01'}),
-            'q3_amount': forms.NumberInput(attrs={'step': '0.01'}),
-            'q4_amount': forms.NumberInput(attrs={'step': '0.01'}),
+            'q1_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
+            'q2_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
+            'q3_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
+            'q4_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
         }
 
 class BudgetAllocationForm(forms.ModelForm):
     class Meta:
         model = BudgetAllocation
         fields = ['credit', 'unit', 'allocated_amount', 'notes']
+        widgets = {
+            'allocated_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
+        }
 
 class BudgetExecutionCommitmentForm(forms.ModelForm):
     class Meta:
@@ -115,6 +118,7 @@ class BudgetExecutionCommitmentForm(forms.ModelForm):
         }
         widgets = {
             'commitment_date': forms.DateInput(attrs={'type': 'date'}),
+            'commitment_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
         }
 
 class BudgetExecutionAccrualForm(forms.ModelForm):
@@ -123,6 +127,7 @@ class BudgetExecutionAccrualForm(forms.ModelForm):
         fields = ['accrued_amount', 'accrued_date']
         widgets = {
             'accrued_date': forms.DateInput(attrs={'type': 'date'}),
+            'accrued_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
         }
 
 class BudgetExecutionPaymentForm(forms.ModelForm):
@@ -131,4 +136,5 @@ class BudgetExecutionPaymentForm(forms.ModelForm):
         fields = ['paid_amount', 'paid_date']
         widgets = {
             'paid_date': forms.DateInput(attrs={'type': 'date'}),
+            'paid_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
         }

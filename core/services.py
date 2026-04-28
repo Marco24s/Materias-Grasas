@@ -104,13 +104,23 @@ def get_procurement_forecast(location=None):
         if location:
             batches_qs = batches_qs.filter(storage_location=location)
             
-        total_available = sum(b.available_quantity for b in batches_qs)
+        total_available = 0.0
+        stock_by_location = {}
+        for b in batches_qs:
+            qty = float(b.available_quantity)
+            if qty > 0:
+                total_available += qty
+                loc = b.storage_location or "Sin Escuadrilla"
+                stock_by_location[loc] = stock_by_location.get(loc, 0.0) + qty
+                
+        stock_breakdown = [{'location': k, 'quantity': v} for k, v in stock_by_location.items()]
         
         active_req = gt.requirements.filter(status__in=['PENDING', 'ORDERED']).first()
         
         fg = {
             'grease_type': gt,
-            'total_available': float(total_available),
+            'total_available': total_available,
+            'stock_breakdown': stock_breakdown,
             'total_projected': 0.0,
             'shortfall': 0.0,
             'plan_details': [],

@@ -272,6 +272,58 @@
             var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
                 return new bootstrap.Tooltip(tooltipTriggerEl)
             })
+
+            // 4. Máscara de moneda en tiempo real (.currency-input)
+            const currencyInputs = document.querySelectorAll('.currency-input');
+            currencyInputs.forEach(input => {
+                // Función para aplicar el formato
+                const formatValue = (val) => {
+                    let cleanValue = val.toString().replace(/\D/g, "");
+                    if (cleanValue === "") return "";
+                    if (cleanValue.length < 3) cleanValue = cleanValue.padStart(3, "0");
+                    
+                    let integerPart = cleanValue.slice(0, -2);
+                    let decimalPart = cleanValue.slice(-2);
+                    
+                    integerPart = parseInt(integerPart).toString();
+                    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                    
+                    return integerPart + "," + decimalPart;
+                };
+
+                // Formatear valor inicial si existe
+                if (input.value) {
+                    // Si el valor viene del servidor con punto decimal, convertir a formato máscara
+                    if (input.value.includes('.') && !input.value.includes(',')) {
+                        input.value = formatValue(parseFloat(input.value).toFixed(2).replace('.', ''));
+                    }
+                }
+
+                input.addEventListener('input', function(e) {
+                    const start = this.selectionStart;
+                    const oldLen = this.value.length;
+                    
+                    this.value = formatValue(this.value);
+                    
+                    // Ajustar posición del cursor
+                    const newLen = this.value.length;
+                    this.setSelectionRange(start + (newLen - oldLen), start + (newLen - oldLen));
+                });
+
+                // Limpiar formato antes de enviar el formulario
+                const form = input.closest('form');
+                if (form && !form.dataset.currencyCleaned) {
+                    form.dataset.currencyCleaned = "true";
+                    form.addEventListener('submit', function() {
+                        const inputsToClean = form.querySelectorAll('.currency-input');
+                        inputsToClean.forEach(i => {
+                            // Quitar puntos y convertir coma en punto para que Django lo entienda como Decimal
+                            let raw = i.value.replace(/\./g, "").replace(",", ".");
+                            if (raw) i.value = raw;
+                        });
+                    });
+                }
+            });
         });
     </script>
     {% block extra_js %}{% endblock %}
