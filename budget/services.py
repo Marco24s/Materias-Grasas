@@ -3,9 +3,9 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db.models import Sum, F
 from .models import (
-    BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetActivity,
+    BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetProg,
     BudgetPPPInc, BudgetPPInc, BudgetPreInc, BudgetIncisosAgrupado,
-    BudgetInc, BudgetPPAI, BudgetCredit, BudgetAllocation, BudgetExecution,
+    BudgetInc, BudgetCredit, BudgetAllocation, BudgetExecution,
     InsufficientFundsError
 )
 
@@ -17,8 +17,8 @@ def create_fiscal_year(year, notes=""):
 
 
 @transaction.atomic
-def create_credit(fiscal_year, ff, subprog, actividad, ppp_inc, pp_inc, pre_inc, 
-                  incisos_agrupado, inc, ppai, q1=0, q2=0, q3=0, q4=0, notes=""):
+def create_credit(fiscal_year, ff, programa, subprog, inc, ppp_inc, pp_inc, pre_inc, 
+                  incisos_agrupado, q1=0, q2=0, q3=0, q4=0, notes=""):
     """
     Registra un nuevo crédito presupuestario utilizando objetos de catálogo.
     """
@@ -27,9 +27,9 @@ def create_credit(fiscal_year, ff, subprog, actividad, ppp_inc, pp_inc, pre_inc,
     
     return BudgetCredit.objects.create(
         fiscal_year=fiscal_year,
-        ff=ff, subprog=subprog, actividad=actividad,
-        ppp_inc=ppp_inc, pp_inc=pp_inc, pre_inc=pre_inc,
-        incisos_agrupado=incisos_agrupado, inc=inc, ppai=ppai,
+        ff=ff, programa=programa, subprog=subprog,
+        inc=inc, ppp_inc=ppp_inc, pp_inc=pp_inc, pre_inc=pre_inc,
+        incisos_agrupado=incisos_agrupado,
         q1_amount=q1, q2_amount=q2, q3_amount=q3, q4_amount=q4,
         notes=notes
     )
@@ -145,6 +145,55 @@ def reprogram_commitment(original_execution, target_allocation, user):
         allocation=target_allocation, reference_code=f"REP-{original_execution.reference_code}",
         amount=amount, commitment_date=timezone.now(), user=user
     )
+
+
+@transaction.atomic
+def release_commitment_surplus(execution_id, user):
+    """
+    Libera el saldo comprometido que no fue devengado.
+    Ajusta el compromiso original al monto devengado/pagado y devuelve la diferencia al Techo.
+    """
+    execution = BudgetExecution.objects.select_related('allocation').get(pk=execution_id)
+    
+    if execution.commitment_amount <= execution.accrued_amount:
+        raise ValidationError("No hay saldo sobrante para liberar.")
+    
+    surplus = execution.commitment_amount - execution.accrued_amount
+    
+    # 1. Ajustamos el compromiso en el registro de ejecución
+    execution.commitment_amount = execution.accrued_amount
+    execution.save()
+    
+    # 2. Devolvemos el saldo a la asignación (Techo)
+    BudgetAllocation.objects.filter(pk=execution.allocation.id).update(
+        spent_amount=F('spent_amount') - surplus
+    )
+    
+    return execution, surplus
+
+
+@transaction.atomic
+def delete_execution(execution_id, user):
+    """
+    Hard delete de un Compromiso (BudgetExecution).
+    Resta el monto comprometido del total gastado (spent_amount) en la Distribución (Techo),
+    liberando los fondos de vuelta a la unidad.
+    """
+    if not hasattr(user, 'is_superuser') or not user.is_superuser:
+        raise PermissionError("Solo los superusuarios pueden eliminar físicamente un registro de ejecución.")
+        
+    execution = BudgetExecution.objects.select_related('allocation').get(pk=execution_id)
+    amount_to_restore = execution.commitment_amount
+    
+    # Bloqueamos la asignación y devolvemos el dinero al Techo
+    allocation = BudgetAllocation.objects.select_for_update().get(pk=execution.allocation_id)
+    allocation.spent_amount -= amount_to_restore
+    allocation.save(update_fields=['spent_amount'])
+    
+    # Eliminamos el registro de ejecución físicamente
+    execution.delete()
+    
+    return amount_to_restore
 
 
 def get_unit_execution_report(fiscal_year):

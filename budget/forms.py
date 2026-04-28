@@ -1,8 +1,10 @@
 from django import forms
+from django.db.models import Sum, F
+from django.db.models.functions import Coalesce
 from .models import (
-    BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetActivity,
+    BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetProg,
     BudgetPPPInc, BudgetPPInc, BudgetPreInc, BudgetIncisosAgrupado,
-    BudgetInc, BudgetPPAI, BudgetCredit, 
+    BudgetInc, BudgetCredit, BudgetClassification, BudgetCreditType,
     BudgetAllocation, BudgetExecution
 )
 
@@ -23,9 +25,9 @@ class BudgetSubprogForm(forms.ModelForm):
         model = BudgetSubprog
         fields = ['code', 'name']
 
-class BudgetActivityForm(forms.ModelForm):
+class BudgetProgForm(forms.ModelForm):
     class Meta:
-        model = BudgetActivity
+        model = BudgetProg
         fields = ['code', 'name']
 
 class BudgetPPPIncForm(forms.ModelForm):
@@ -53,31 +55,26 @@ class BudgetIncForm(forms.ModelForm):
         model = BudgetInc
         fields = ['code', 'name']
 
-class BudgetPPAIForm(forms.ModelForm):
-    class Meta:
-        model = BudgetPPAI
-        fields = ['code', 'name']
 
 class BudgetCreditForm(forms.ModelForm):
     class Meta:
         model = BudgetCredit
         fields = [
-            'fiscal_year', 'ff', 'subprog', 'actividad', 
-            'ppp_inc', 'pp_inc', 'pre_inc', 'incisos_agrupado', 
-            'inc', 'ppai', 'q1_amount', 'q2_amount', 
-            'q3_amount', 'q4_amount', 'notes'
+            'fiscal_year', 'credit_type', 'ff', 'programa', 'subprog', 'inc',
+            'ppp_inc', 'pp_inc', 'pre_inc', 'incisos_agrupado',
+            'q1_amount', 'q2_amount', 'q3_amount', 'q4_amount', 'notes'
         ]
         labels = {
             'fiscal_year': 'Ejercicio Económico',
+            'credit_type': 'Tipo de Crédito',
             'ff': 'Fuente de Financiamiento (FF)',
+            'programa': 'Programa',
             'subprog': 'Subprograma',
-            'actividad': 'Actividad General',
-            'ppp_inc': 'PPP-INC',
-            'pp_inc': 'PP-INC',
-            'pre_inc': 'Pre-inciso',
-            'incisos_agrupado': 'Sub-Incisos',
-            'inc': 'Inciso Principal',
-            'ppai': 'PPAI (Objeto de Gasto)',
+            'inc': 'INCISO',
+            'ppp_inc': 'PPAL',
+            'pp_inc': 'PARCIAL',
+            'pre_inc': 'SUBPC',
+            'incisos_agrupado': 'MONEDA',
             'q1_amount': 'Monto 1er Cuatrimestre',
             'q2_amount': 'Monto 2do Cuatrimestre',
             'q3_amount': 'Monto 3er Cuatrimestre',
@@ -85,19 +82,56 @@ class BudgetCreditForm(forms.ModelForm):
             'notes': 'Observaciones'
         }
         widgets = {
+<<<<<<< HEAD
             'q1_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
             'q2_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
             'q3_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
             'q4_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
+=======
+            'q1_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
+            'q2_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
+            'q3_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
+            'q4_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
+>>>>>>> c32ccccea5175dc975c8fb4b6ec53e9427931fe7
         }
+        localized_fields = ('q1_amount', 'q2_amount', 'q3_amount', 'q4_amount')
+
+class CreditChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        available = getattr(obj, 'available_amount', obj.total_amount)
+        # Formato de puntos y comas. Reemplazando para evitar locale configs locales
+        av_str = f"{available:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"{obj} (Disponible para distribuir: ${av_str})"
 
 class BudgetAllocationForm(forms.ModelForm):
+    credit = CreditChoiceField(
+        queryset=BudgetCredit.objects.none(),
+        label="Crédito Origen",
+        empty_label="--------- Seleccione un Crédito ---------"
+    )
+    
     class Meta:
         model = BudgetAllocation
         fields = ['credit', 'unit', 'allocated_amount', 'notes']
         widgets = {
+<<<<<<< HEAD
             'allocated_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
         }
+=======
+            'allocated_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
+        }
+        localized_fields = ('allocated_amount',)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from django.db import models
+        # Annotate available_amount efficiently 
+        self.fields['credit'].queryset = BudgetCredit.objects.annotate(
+            allocated_total=Coalesce(Sum('allocations__allocated_amount'), 0, output_field=models.DecimalField())
+        ).annotate(
+            available_amount=F('total_amount') - F('allocated_total')
+        ).order_by('-fiscal_year__year', 'ff__code')
+>>>>>>> c32ccccea5175dc975c8fb4b6ec53e9427931fe7
 
 class BudgetExecutionCommitmentForm(forms.ModelForm):
     class Meta:
@@ -118,8 +152,13 @@ class BudgetExecutionCommitmentForm(forms.ModelForm):
         }
         widgets = {
             'commitment_date': forms.DateInput(attrs={'type': 'date'}),
+<<<<<<< HEAD
             'commitment_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
+=======
+            'commitment_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
+>>>>>>> c32ccccea5175dc975c8fb4b6ec53e9427931fe7
         }
+        localized_fields = ('commitment_amount',)
 
 class BudgetExecutionAccrualForm(forms.ModelForm):
     class Meta:
@@ -127,8 +166,13 @@ class BudgetExecutionAccrualForm(forms.ModelForm):
         fields = ['accrued_amount', 'accrued_date']
         widgets = {
             'accrued_date': forms.DateInput(attrs={'type': 'date'}),
+<<<<<<< HEAD
             'accrued_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
+=======
+            'accrued_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
+>>>>>>> c32ccccea5175dc975c8fb4b6ec53e9427931fe7
         }
+        localized_fields = ('accrued_amount',)
 
 class BudgetExecutionPaymentForm(forms.ModelForm):
     class Meta:
@@ -136,5 +180,47 @@ class BudgetExecutionPaymentForm(forms.ModelForm):
         fields = ['paid_amount', 'paid_date']
         widgets = {
             'paid_date': forms.DateInput(attrs={'type': 'date'}),
+<<<<<<< HEAD
             'paid_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
+=======
+            'paid_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
+>>>>>>> c32ccccea5175dc975c8fb4b6ec53e9427931fe7
         }
+        localized_fields = ('paid_amount',)
+
+class BudgetCreditTypeForm(forms.ModelForm):
+    class Meta:
+        model = BudgetCreditType
+        fields = ['code', 'name']
+        labels = {'code': 'Código', 'name': 'Nombre / Descripción'}
+
+class BudgetClassificationForm(forms.ModelForm):
+    class Meta:
+        model = BudgetClassification
+        fields = ['name', 'notes']
+        labels = {
+            'name': 'Nombre de la Clasificación',
+            'notes': 'Notas / Descripción'
+        }
+
+class BudgetClassificationAssignForm(forms.Form):
+    # This form is used from the classification perspective to pull credits into itself
+    credits = forms.ModelMultipleChoiceField(
+        queryset=BudgetCredit.objects.all(),
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label="Seleccionar Créditos"
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.classification = kwargs.pop('classification', None)
+        super().__init__(*args, **kwargs)
+        if self.classification:
+            # Set initial checked instances (credit items)
+            self.fields['credits'].initial = self.classification.credits.all()
+            
+            # Since credits have fiscal years, let's limit choices if needed.
+            # Right now let's just make sure active fiscal year is considered if any, or order by fiscal_year
+            self.fields['credits'].queryset = BudgetCredit.objects.all().select_related(
+                'fiscal_year', 'ff', 'programa', 'subprog', 'inc', 'ppp_inc', 'pp_inc', 'pre_inc'
+            ).order_by('-fiscal_year__year')

@@ -1,4 +1,5 @@
 {% extends "budget/base_budget.html" %}
+{% load l10n %}
 
 {% block budget_content %}
 <div class="budget-header animate__animated animate__fadeIn">
@@ -37,8 +38,34 @@
                             <h3 class="fw-bold mb-0">${{ stats.total_credit|floatformat:2 }}</h3>
                         </div>
                     </div>
+                    {% if stats.credit_by_type %}
+                    <hr class="my-2 opacity-25">
+                    <div class="small">
+                        {% for row in stats.credit_by_type %}
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted">
+                                <i class="fa-solid fa-tag fa-xs me-1 text-primary opacity-50"></i>
+                                {{ row.credit_type__name }}
+                            </span>
+                            <span class="fw-bold">${{ row.subtotal|floatformat:2 }}</span>
+                        </div>
+                        {% if stats.total_credit > 0 %}
+                        <div class="progress mb-2" style="height: 3px;">
+                            <div class="progress-bar bg-primary" style="width: {% widthratio row.subtotal stats.total_credit 100 %}%"></div>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                        {% if stats.credit_by_type|length > 1 %}
+                        <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
+                            <span class="fw-bold text-muted">TOTAL:</span>
+                            <span class="fw-bold text-primary">${{ stats.total_credit|floatformat:2 }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
+
             <div class="col-md-6">
                 <div class="card card-stats h-100 p-3">
                     <div class="d-flex align-items-center mb-3">
@@ -123,6 +150,9 @@
                 <a href="{% url 'budget:allocation_create' %}" class="btn btn-outline-dark btn-sm text-start py-2">
                    <i class="fa-solid fa-share-nodes me-2"></i> Distribuir a Unidad
                 </a>
+                <a href="{% url 'budget:classification_list' %}" class="btn btn-outline-info btn-sm text-start py-2 mt-2 border-2 text-dark">
+                    <i class="fa-solid fa-umbrella text-info me-2"></i> <strong>Mis Clasificaciones</strong> Especiales
+                </a>
             </div>
         </div>
 
@@ -135,6 +165,73 @@
             <div class="small d-flex justify-content-between">
                 <span>Saldo por Ejecutar:</span>
                 <span class="fw-bold text-warning">${{ stats.available_to_execute|floatformat:2 }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row animate__animated animate__fadeInUp mb-4">
+    <div class="col-12">
+        <div class="card card-stats p-4 border-start border-4 border-warning shadow-sm">
+            <h5 class="fw-bold mb-4">
+                <i class="fa-solid fa-calendar-days text-warning me-2"></i>
+                Programación Trimestral AA.PP. vs. Compromisos
+            </h5>
+            <div class="row text-center g-2 mb-4">
+                <div class="col-6 col-md-3 border-end">
+                    <div class="bg-white rounded-3 p-2 shadow-sm h-100">
+                        <label class="text-muted small d-block mb-1">1er Trimestre</label>
+                        <div class="fw-bold text-dark text-nowrap" style="font-size: 0.95rem;">${{ stats.q1_total|localize }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3 border-end">
+                    <div class="bg-white rounded-3 p-2 shadow-sm h-100">
+                        <label class="text-muted small d-block mb-1">2do Trimestre</label>
+                        <div class="fw-bold text-dark text-nowrap" style="font-size: 0.95rem;">${{ stats.q2_total|localize }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3 border-end">
+                    <div class="bg-white rounded-3 p-2 shadow-sm h-100">
+                        <label class="text-muted small d-block mb-1">3er Trimestre</label>
+                        <div class="fw-bold text-dark text-nowrap" style="font-size: 0.95rem;">${{ stats.q3_total|localize }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="bg-white rounded-3 p-2 shadow-sm h-100">
+                        <label class="text-muted small d-block mb-1">4to Trimestre</label>
+                        <div class="fw-bold text-dark text-nowrap" style="font-size: 0.95rem;">${{ stats.q4_total|localize }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Barra de Distribución Acumulada (Basada en Comprometido) -->
+            <div class="px-2">
+                <div class="d-flex justify-content-between small text-muted mb-1">
+                    <span>Progreso de Montos Comprometidos</span>
+                    <span>Total Comprometido: <strong class="text-warning">${{ stats.total_commitment|localize }}</strong></span>
+                </div>
+                <div class="progress shadow-sm" style="height: 12px; background: rgba(0,0,0,0.05); border-radius: 6px;">
+                    <!-- Segmento T1 -->
+                    <div class="d-flex" style="width: {{ stats.q1_seg|stringformat:'f' }}%; border-right: 2px solid white;">
+                        <div class="bg-warning h-100" style="width: {{ stats.q1_fill|stringformat:'f' }}%;" title="T1: {{ stats.q1_fill|floatformat:1 }}%"></div>
+                        <div class="bg-secondary bg-opacity-10 h-100 flex-grow-1"></div>
+                    </div>
+                    <!-- Segmento T2 -->
+                    <div class="d-flex" style="width: {{ stats.q2_seg|stringformat:'f' }}%; border-right: 2px solid white;">
+                        <div class="bg-warning h-100" style="width: {{ stats.q2_fill|stringformat:'f' }}%;" title="T2: {{ stats.q2_fill|floatformat:1 }}%"></div>
+                        <div class="bg-secondary bg-opacity-10 h-100 flex-grow-1"></div>
+                    </div>
+                    <!-- Segmento T3 -->
+                    <div class="d-flex" style="width: {{ stats.q3_seg|stringformat:'f' }}%; border-right: 2px solid white;">
+                        <div class="bg-warning h-100" style="width: {{ stats.q3_fill|stringformat:'f' }}%;" title="T3: {{ stats.q3_fill|floatformat:1 }}%"></div>
+                        <div class="bg-secondary bg-opacity-10 h-100 flex-grow-1"></div>
+                    </div>
+                    <!-- Segmento T4 -->
+                    <div class="d-flex" style="width: {{ stats.q4_seg|stringformat:'f' }}%;">
+                        <div class="bg-warning h-100" style="width: {{ stats.q4_fill|stringformat:'f' }}%;" title="T4: {{ stats.q4_fill|floatformat:1 }}%"></div>
+                        <div class="bg-secondary bg-opacity-10 h-100 flex-grow-1"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

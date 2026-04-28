@@ -1,5 +1,6 @@
 {% extends "budget/base_budget.html" %}
 {% load crispy_forms_tags %}
+{% load l10n %}
 
 {% block budget_content %}
 <div class="row justify-content-center">
@@ -12,6 +13,19 @@
         </div>
 
         <div class="card card-stats p-4">
+            {% if fixed_credit %}
+                <div class="alert alert-secondary border-0 bg-secondary bg-opacity-10 d-flex align-items-center mb-4">
+                    <div class="me-3">
+                        <i class="fa-solid fa-file-invoice text-secondary fa-2x"></i>
+                    </div>
+                    <div>
+                        <div class="small fw-bold text-uppercase text-muted lh-1 mb-1">Crédito Seleccionado</div>
+                        <div class="fs-5 fw-bold text-dark">{{ fixed_credit }}</div>
+                        <small class="text-muted">Total: <strong>${{ fixed_credit.total_amount|localize }}</strong></small>
+                    </div>
+                </div>
+            {% endif %}
+            
             {% if help_text %}
                 <div class="alert alert-info border-0 bg-info bg-opacity-10 text-dark small mb-4">
                     <i class="fa-solid fa-circle-info me-1 text-info"></i> {{ help_text }}
@@ -31,4 +45,42 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const currencyInputs = document.querySelectorAll('.currency-input');
+    
+    currencyInputs.forEach(input => {
+        // Format initial values
+        formatCurrencyInput(input);
+        
+        input.addEventListener('input', function(e) {
+            // Store current cursor position
+            let cursor = this.selectionStart;
+            let oldLength = this.value.length;
+            
+            formatCurrencyInput(this);
+            
+            // Re-adjust cursor position to prevent jumping to the end
+            let diff = this.value.length - oldLength;
+            this.setSelectionRange(cursor + diff, cursor + diff);
+        });
+    });
+
+    function formatCurrencyInput(elem) {
+        // Only keep numbers, minus sign (if allowed, but generally not for inputs here), and one comma
+        let val = elem.value.replace(/[^0-9,]/g, ''); 
+        if(!val) return;
+        
+        let parts = val.split(',');
+        let integerPart = parts[0];
+        let decimalPart = parts.length > 1 ? ',' + parts[1].substring(0, 2) : '';
+
+        // Add dots every 3 digits
+        integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        
+        elem.value = integerPart + decimalPart;
+    }
+});
+</script>
 {% endblock %}

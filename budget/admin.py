@@ -1,8 +1,8 @@
 from django.contrib import admin
 from .models import (
-    BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetActivity,
+    BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetProg,
     BudgetPPPInc, BudgetPPInc, BudgetPreInc, BudgetIncisosAgrupado,
-    BudgetInc, BudgetPPAI, BudgetCredit, BudgetAllocation, BudgetExecution
+    BudgetInc, BudgetCredit, BudgetAllocation, BudgetExecution
 )
 
 @admin.register(BudgetFiscalYear)
@@ -14,13 +14,13 @@ class BudgetFiscalYearAdmin(admin.ModelAdmin):
 class BudgetFFAdmin(admin.ModelAdmin):
     list_display = ('code', 'name')
 
+@admin.register(BudgetProg)
+class BudgetProgAdmin(admin.ModelAdmin):
+    list_display = ('code', 'name')
+
 @admin.register(BudgetSubprog)
 class BudgetSubprogAdmin(admin.ModelAdmin):
     list_display = ('code', 'name')
-
-@admin.register(BudgetActivity)
-class BudgetActivityAdmin(admin.ModelAdmin):
-    list_display = ('name',)
 
 @admin.register(BudgetPPPInc, BudgetPPInc, BudgetPreInc, BudgetIncisosAgrupado)
 class GenericClassifierAdmin(admin.ModelAdmin):
@@ -30,14 +30,15 @@ class GenericClassifierAdmin(admin.ModelAdmin):
 class BudgetIncAdmin(admin.ModelAdmin):
     list_display = ('code', 'name')
 
-@admin.register(BudgetPPAI)
-class BudgetPPAIAdmin(admin.ModelAdmin):
-    list_display = ('code', 'name')
 
 @admin.register(BudgetCredit)
 class BudgetCreditAdmin(admin.ModelAdmin):
-    list_display = ('fiscal_year', 'ff', 'subprog', 'inc', 'ppai', 'total_amount')
-    list_filter = ('fiscal_year', 'ff', 'inc')
+    list_display = (
+        'fiscal_year', 'ff', 'programa', 'subprog', 
+        'inc', 'ppp_inc', 'pp_inc', 'pre_inc', 'incisos_agrupado', 
+        'total_amount'
+    )
+    list_filter = ('fiscal_year', 'ff', 'programa', 'inc', 'ppp_inc')
 
 @admin.register(BudgetAllocation)
 class BudgetAllocationAdmin(admin.ModelAdmin):
