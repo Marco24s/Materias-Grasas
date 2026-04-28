@@ -139,7 +139,20 @@ def credit_list(request):
         )
     else:
         credits = BudgetCredit.objects.filter(allocations__unit=request.user.unit).distinct()
-    return render(request, 'budget/credit_list.html', {'credits': credits})
+        
+    credit_by_type = (
+        credits.filter(credit_type__isnull=False)
+        .values('credit_type__name', 'credit_type__code')
+        .annotate(subtotal=Sum('total_amount'))
+        .order_by('credit_type__name')
+    )
+    unassigned_total = credits.filter(credit_type__isnull=True).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+
+    return render(request, 'budget/credit_list.html', {
+        'credits': credits,
+        'credit_by_type': credit_by_type,
+        'unassigned_total': unassigned_total
+    })
 
 def credit_detail(request, pk):
     credit = get_object_or_404(BudgetCredit, pk=pk)
