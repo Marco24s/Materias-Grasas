@@ -82,17 +82,10 @@ class BudgetCreditForm(forms.ModelForm):
             'notes': 'Observaciones'
         }
         widgets = {
-<<<<<<< HEAD
-            'q1_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
-            'q2_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
-            'q3_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
-            'q4_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
-=======
-            'q1_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
-            'q2_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
-            'q3_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
-            'q4_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
->>>>>>> c32ccccea5175dc975c8fb4b6ec53e9427931fe7
+            'q1_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
+            'q2_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
+            'q3_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
+            'q4_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
         }
         localized_fields = ('q1_amount', 'q2_amount', 'q3_amount', 'q4_amount')
 
@@ -114,11 +107,7 @@ class BudgetAllocationForm(forms.ModelForm):
         model = BudgetAllocation
         fields = ['credit', 'unit', 'allocated_amount', 'notes']
         widgets = {
-<<<<<<< HEAD
-            'allocated_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
-        }
-=======
-            'allocated_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
+            'allocated_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
         }
         localized_fields = ('allocated_amount',)
 
@@ -131,7 +120,6 @@ class BudgetAllocationForm(forms.ModelForm):
         ).annotate(
             available_amount=F('total_amount') - F('allocated_total')
         ).order_by('-fiscal_year__year', 'ff__code')
->>>>>>> c32ccccea5175dc975c8fb4b6ec53e9427931fe7
 
 class BudgetExecutionCommitmentForm(forms.ModelForm):
     class Meta:
@@ -152,11 +140,7 @@ class BudgetExecutionCommitmentForm(forms.ModelForm):
         }
         widgets = {
             'commitment_date': forms.DateInput(attrs={'type': 'date'}),
-<<<<<<< HEAD
-            'commitment_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
-=======
-            'commitment_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
->>>>>>> c32ccccea5175dc975c8fb4b6ec53e9427931fe7
+            'commitment_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
         }
         localized_fields = ('commitment_amount',)
 
@@ -166,11 +150,7 @@ class BudgetExecutionAccrualForm(forms.ModelForm):
         fields = ['accrued_amount', 'accrued_date']
         widgets = {
             'accrued_date': forms.DateInput(attrs={'type': 'date'}),
-<<<<<<< HEAD
-            'accrued_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
-=======
-            'accrued_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
->>>>>>> c32ccccea5175dc975c8fb4b6ec53e9427931fe7
+            'accrued_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
         }
         localized_fields = ('accrued_amount',)
 
@@ -180,11 +160,7 @@ class BudgetExecutionPaymentForm(forms.ModelForm):
         fields = ['paid_amount', 'paid_date']
         widgets = {
             'paid_date': forms.DateInput(attrs={'type': 'date'}),
-<<<<<<< HEAD
-            'paid_amount': forms.TextInput(attrs={'class': 'currency-input', 'placeholder': '0,00'}),
-=======
-            'paid_amount': forms.TextInput(attrs={'class': 'form-control currency-input'}),
->>>>>>> c32ccccea5175dc975c8fb4b6ec53e9427931fe7
+            'paid_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
         }
         localized_fields = ('paid_amount',)
 
