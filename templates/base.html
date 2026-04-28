@@ -278,36 +278,49 @@
             currencyInputs.forEach(input => {
                 // Función para aplicar el formato
                 const formatValue = (val) => {
-                    let cleanValue = val.toString().replace(/\D/g, "");
-                    if (cleanValue === "") return "";
-                    if (cleanValue.length < 3) cleanValue = cleanValue.padStart(3, "0");
-                    
-                    let integerPart = cleanValue.slice(0, -2);
-                    let decimalPart = cleanValue.slice(-2);
-                    
-                    integerPart = parseInt(integerPart).toString();
-                    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-                    
-                    return integerPart + "," + decimalPart;
+                    let cleaned = val.toString().replace(/[^0-9,]/g, '');
+                    if (cleaned === '') return '';
+
+                    // Permitir ingreso directo de números y coma decimal
+                    const parts = cleaned.split(',');
+                    let integerPart = parts[0].replace(/^0+(?=\d)/, '');
+                    if (integerPart === '') integerPart = '0';
+                    let decimalPart = parts.length > 1 ? ',' + parts[1].substring(0, 2) : '';
+
+                    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                    return integerPart + decimalPart;
                 };
 
                 // Formatear valor inicial si existe
                 if (input.value) {
-                    // Si el valor viene del servidor con punto decimal, convertir a formato máscara
-                    if (input.value.includes('.') && !input.value.includes(',')) {
-                        input.value = formatValue(parseFloat(input.value).toFixed(2).replace('.', ''));
+                    let value = input.value;
+                    if (value.includes('.') && !value.includes(',')) {
+                        value = parseFloat(value.replace(/\./g, '').replace(',', '.'));
+                        if (!isNaN(value)) {
+                            input.value = formatValue(value.toFixed(2).replace('.', ','));
+                        }
+                    } else {
+                        input.value = formatValue(value);
                     }
                 }
+
+                input.addEventListener('focus', function() {
+                    if (this.value === '0,00') {
+                        this.value = '';
+                    }
+                    this.select();
+                });
 
                 input.addEventListener('input', function(e) {
                     const start = this.selectionStart;
                     const oldLen = this.value.length;
-                    
+
                     this.value = formatValue(this.value);
-                    
+
                     // Ajustar posición del cursor
                     const newLen = this.value.length;
-                    this.setSelectionRange(start + (newLen - oldLen), start + (newLen - oldLen));
+                    const cursor = Math.max(0, start + (newLen - oldLen));
+                    this.setSelectionRange(cursor, cursor);
                 });
 
                 // Limpiar formato antes de enviar el formulario

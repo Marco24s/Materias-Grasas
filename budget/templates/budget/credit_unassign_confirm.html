@@ -1,4 +1,5 @@
 {% extends "budget/base_budget.html" %}
+{% load budget_tags %}
 
 {% block budget_content %}
 <div class="row justify-content-center">
@@ -22,7 +23,7 @@
 
                 <dt class="col-sm-4 text-muted small text-uppercase">Tipo Actual</dt>
                 <dd class="col-sm-8">
-                    <span class="badge bg-primary rounded-pill">{{ credit.credit_type }}</span>
+                    <span class="badge {{ credit.credit_type.code|credit_type_badge_color }} rounded-pill">{{ credit.credit_type }}</span>
                 </dd>
 
                 <dt class="col-sm-4 text-muted small text-uppercase">Resultado</dt>
@@ -33,9 +34,22 @@
 
             <form method="post">
                 {% csrf_token %}
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label for="current_amount" class="form-label fw-bold">Monto actual del crédito</label>
+                        <input type="text" name="current_amount" id="current_amount" class="form-control currency-input" value="{{ current_amount|default:credit.total_amount }}" placeholder="0,00">
+                        <div class="form-text">Ingrese el monto de referencia del crédito antes de la desasignación.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="unassign_amount" class="form-label fw-bold">Monto a desasignar</label>
+                        <input type="text" name="unassign_amount" id="unassign_amount" class="form-control currency-input" value="{{ unassign_amount }}" placeholder="0,00">
+                        <div class="form-text">Ingrese cuánto del crédito está desasignando en esta acción.</div>
+                    </div>
+                </div>
+
                 <div class="mb-4">
                     <label for="notes" class="form-label fw-bold">Motivo de la Desasignación <small class="text-muted fw-normal">(opcional pero recomendado)</small></label>
-                    <textarea name="notes" id="notes" class="form-control" rows="3" placeholder="Ej: Error al cargar el tipo, se corregirá más adelante..."></textarea>
+                    <textarea name="notes" id="notes" class="form-control" rows="3" placeholder="Ej: Error al cargar el tipo, se corregirá más adelante...">{{ notes }}</textarea>
                 </div>
 
                 <div class="d-flex gap-2 justify-content-end">

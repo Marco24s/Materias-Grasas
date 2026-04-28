@@ -298,22 +298,70 @@ def credit_unassign_type(request, pk):
         messages.warning(request, "Este crédito ya no tiene un tipo asignado.")
         return redirect('budget:credit_list')
     
+    def parse_currency(value):
+        if not value:
+            return None
+        raw = value.replace(' ', '').replace('.', '').replace(',', '.')
+        return Decimal(raw)
+
     if request.method == 'POST':
-        notes = request.POST.get('notes', '').strip()
+        current_amount_txt = request.POST.get('current_amount', '').strip()
+        unassign_amount_txt = request.POST.get('unassign_amount', '').strip()
+        notes_txt = request.POST.get('notes', '').strip()
+        current_amount = None
+        unassign_amount = None
+        has_error = False
+
+        if current_amount_txt:
+            try:
+                current_amount = parse_currency(current_amount_txt)
+            except Exception:
+                messages.error(request, "El monto actual ingresado no es válido.")
+                has_error = True
+        if unassign_amount_txt:
+            try:
+                unassign_amount = parse_currency(unassign_amount_txt)
+            except Exception:
+                messages.error(request, "El monto a desasignar ingresado no es válido.")
+                has_error = True
+
+        if has_error:
+            return render(request, 'budget/credit_unassign_confirm.html', {
+                'credit': credit,
+                'current_amount': current_amount_txt,
+                'unassign_amount': unassign_amount_txt,
+                'notes': notes_txt
+            })
+
+        details = []
+        if current_amount is not None:
+            details.append(f"Monto crédito: ${current_amount:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
+        if unassign_amount is not None:
+            details.append(f"Monto desasignado: ${unassign_amount:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
+        if notes_txt:
+            details.append(notes_txt)
+
+        notes = ' | '.join(details) if details else None
+
         BudgetCreditTypeLog.objects.create(
             credit=credit,
             action=BudgetCreditTypeLog.ACTION_UNASSIGN,
             previous_type=credit.credit_type,
             new_type=None,
             user=request.user,
-            notes=notes or None
+            notes=notes
         )
         credit.credit_type = None
         credit.save(update_fields=['credit_type'])
         messages.success(request, f"Tipo de crédito removido de {credit}. El evento quedó registrado.")
         return redirect('budget:credit_list')
 
-    return render(request, 'budget/credit_unassign_confirm.html', {'credit': credit})
+    return render(request, 'budget/credit_unassign_confirm.html', {
+        'credit': credit,
+        'current_amount': credit.total_amount,
+        'unassign_amount': '',
+        'notes': ''
+    })
 
 def credit_type_log(request):
     """Shows the full audit log of credit type assignment changes."""

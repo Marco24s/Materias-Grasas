@@ -45,42 +45,4 @@
         </div>
     </div>
 </div>
-
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-    const currencyInputs = document.querySelectorAll('.currency-input');
-    
-    currencyInputs.forEach(input => {
-        // Format initial values
-        formatCurrencyInput(input);
-        
-        input.addEventListener('input', function(e) {
-            // Store current cursor position
-            let cursor = this.selectionStart;
-            let oldLength = this.value.length;
-            
-            formatCurrencyInput(this);
-            
-            // Re-adjust cursor position to prevent jumping to the end
-            let diff = this.value.length - oldLength;
-            this.setSelectionRange(cursor + diff, cursor + diff);
-        });
-    });
-
-    function formatCurrencyInput(elem) {
-        // Only keep numbers, minus sign (if allowed, but generally not for inputs here), and one comma
-        let val = elem.value.replace(/[^0-9,]/g, ''); 
-        if(!val) return;
-        
-        let parts = val.split(',');
-        let integerPart = parts[0];
-        let decimalPart = parts.length > 1 ? ',' + parts[1].substring(0, 2) : '';
-
-        // Add dots every 3 digits
-        integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-        
-        elem.value = integerPart + decimalPart;
-    }
-});
-</script>
 {% endblock %}

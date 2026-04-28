@@ -1,5 +1,5 @@
 {% extends "budget/base_budget.html" %}
-{% load l10n %}
+{% load l10n budget_tags %}
 
 {% block budget_content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -57,7 +57,7 @@
                     </td>
                     <td class="text-center">
                         {% if credit.credit_type %}
-                        <span class="badge bg-primary rounded-pill small">{{ credit.credit_type.code }}</span>
+                        <span class="badge {{ credit.credit_type.code|credit_type_badge_color }} rounded-pill small">{{ credit.credit_type.code }}</span>
                         {% else %}
                         <span class="text-muted small">—</span>
                         {% endif %}
@@ -106,7 +106,7 @@
                 {% if credit_by_type or unassigned_total %}
                     {% for row in credit_by_type %}
                         <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
-                            <span class="text-muted"><span class="badge bg-primary-subtle text-primary me-2">{{ row.credit_type__code }}</span> {{ row.credit_type__name }}</span>
+                            <span class="text-muted"><span class="badge {{ row.credit_type__code|credit_type_badge_color }} me-2" style="color: white;">{{ row.credit_type__code }}</span> {{ row.credit_type__name }}</span>
                             <span class="fw-bold text-dark">${{ row.subtotal|floatformat:2 }}</span>
                         </div>
                     {% endfor %}
