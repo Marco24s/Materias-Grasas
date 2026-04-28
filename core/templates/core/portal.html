@@ -171,36 +171,38 @@
 
                 <!-- SIGERA Card -->
                 <div class="col-md-5 col-lg-4">
-                    <div class="card system-card active-system p-4 h-100 position-relative">
+                    <div class="card system-card disabled-system p-4 h-100 position-relative" style="opacity: 0.65; cursor: not-allowed;">
+                        <div class="badge-soon">Próx.</div>
                         <div class="card-body d-flex flex-column align-items-center text-center">
-                            <div class="icon-box" style="background: linear-gradient(135deg, #6f42c1 0%, #462880 100%);">
-                                <i class="fa-solid fa-shirt" style="color: white;"></i>
+                            <div class="icon-box">
+                                <i class="fa-solid fa-shirt"></i>
                             </div>
                             <h3 class="card-title fw-bold mb-3">SIGERA</h3>
                             <p class="card-text text-muted mb-4 flex-grow-1">
                                 Sistema de Gestión de Ropa Aeronaval. Control integral de vestuario y equipamiento.
                             </p>
-                            <a href="{% url 'sigera:home' %}" class="btn btn-primary btn-portal w-100 mt-auto" style="background-color: #6f42c1; border-color: #6f42c1;">
-                                Ingresar al Sistema <i class="fa-solid fa-arrow-right ms-2"></i>
-                            </a>
+                            <button class="btn btn-secondary btn-portal w-100 mt-auto" disabled>
+                                No Disponible <i class="fa-solid fa-lock ms-2"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
 
                 <!-- SGP Card -->
                 <div class="col-md-5 col-lg-4">
-                    <div class="card system-card active-system p-4 h-100">
+                    <div class="card system-card disabled-system p-4 h-100 position-relative" style="opacity: 0.65; cursor: not-allowed;">
+                        <div class="badge-soon">Próx.</div>
                         <div class="card-body d-flex flex-column align-items-center text-center">
-                            <div class="icon-box" style="background: linear-gradient(135deg, #198754 0%, #0b422a 100%);">
-                                <i class="fa-solid fa-money-bill-trend-up" style="color: white;"></i>
+                            <div class="icon-box">
+                                <i class="fa-solid fa-money-bill-trend-up"></i>
                             </div>
                             <h3 class="card-title fw-bold mb-3">SGP</h3>
                             <p class="card-text text-muted mb-4 flex-grow-1">
                                 Sistema de Gestión Presupuestaria. Control total de créditos, distribución y ejecución de gastos por etapas.
                             </p>
-                            <a href="{% url 'budget:dashboard' %}" class="btn btn-primary btn-portal w-100 mt-auto" style="background-color: #198754; border-color: #198754;">
-                                Ingresar al Sistema <i class="fa-solid fa-arrow-right ms-2"></i>
-                            </a>
+                            <button class="btn btn-secondary btn-portal w-100 mt-auto" disabled>
+                                No Disponible <i class="fa-solid fa-lock ms-2"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
