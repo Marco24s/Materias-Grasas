@@ -179,27 +179,75 @@
             </h5>
             <div class="row text-center g-2 mb-4">
                 <div class="col-6 col-md-3 border-end">
-                    <div class="bg-white rounded-3 p-2 shadow-sm h-100">
-                        <label class="text-muted small d-block mb-1">1er Trimestre</label>
-                        <div class="fw-bold text-dark text-nowrap" style="font-size: 0.95rem;">${{ stats.q1_total|localize }}</div>
+                    <div class="bg-white rounded-3 p-3 shadow-sm h-100 d-flex flex-column justify-content-between">
+                        <label class="text-muted small d-block mb-2 fw-bold text-uppercase" style="letter-spacing: 1px;">1er Trimestre</label>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span class="text-muted">Asignado:</span>
+                                <span class="fw-bold">${{ stats.q1_asignacion|localize }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between small">
+                                <span class="text-muted">Refuerzo:</span>
+                                <span class="fw-bold text-info">${{ stats.q1_refuerzo|localize }}</span>
+                            </div>
+                        </div>
+                        <div class="pt-2 border-top mt-auto">
+                            <div class="fw-bold text-primary" style="font-size: 1rem;">Total: ${{ stats.q1_total|localize }}</div>
+                        </div>
                     </div>
                 </div>
                 <div class="col-6 col-md-3 border-end">
-                    <div class="bg-white rounded-3 p-2 shadow-sm h-100">
-                        <label class="text-muted small d-block mb-1">2do Trimestre</label>
-                        <div class="fw-bold text-dark text-nowrap" style="font-size: 0.95rem;">${{ stats.q2_total|localize }}</div>
+                    <div class="bg-white rounded-3 p-3 shadow-sm h-100 d-flex flex-column justify-content-between">
+                        <label class="text-muted small d-block mb-2 fw-bold text-uppercase" style="letter-spacing: 1px;">2do Trimestre</label>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span class="text-muted">Asignado:</span>
+                                <span class="fw-bold">${{ stats.q2_asignacion|localize }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between small">
+                                <span class="text-muted">Refuerzo:</span>
+                                <span class="fw-bold text-info">${{ stats.q2_refuerzo|localize }}</span>
+                            </div>
+                        </div>
+                        <div class="pt-2 border-top mt-auto">
+                            <div class="fw-bold text-primary" style="font-size: 1rem;">Total: ${{ stats.q2_total|localize }}</div>
+                        </div>
                     </div>
                 </div>
                 <div class="col-6 col-md-3 border-end">
-                    <div class="bg-white rounded-3 p-2 shadow-sm h-100">
-                        <label class="text-muted small d-block mb-1">3er Trimestre</label>
-                        <div class="fw-bold text-dark text-nowrap" style="font-size: 0.95rem;">${{ stats.q3_total|localize }}</div>
+                    <div class="bg-white rounded-3 p-3 shadow-sm h-100 d-flex flex-column justify-content-between">
+                        <label class="text-muted small d-block mb-2 fw-bold text-uppercase" style="letter-spacing: 1px;">3er Trimestre</label>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span class="text-muted">Asignado:</span>
+                                <span class="fw-bold">${{ stats.q3_asignacion|localize }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between small">
+                                <span class="text-muted">Refuerzo:</span>
+                                <span class="fw-bold text-info">${{ stats.q3_refuerzo|localize }}</span>
+                            </div>
+                        </div>
+                        <div class="pt-2 border-top mt-auto">
+                            <div class="fw-bold text-primary" style="font-size: 1rem;">Total: ${{ stats.q3_total|localize }}</div>
+                        </div>
                     </div>
                 </div>
                 <div class="col-6 col-md-3">
-                    <div class="bg-white rounded-3 p-2 shadow-sm h-100">
-                        <label class="text-muted small d-block mb-1">4to Trimestre</label>
-                        <div class="fw-bold text-dark text-nowrap" style="font-size: 0.95rem;">${{ stats.q4_total|localize }}</div>
+                    <div class="bg-white rounded-3 p-3 shadow-sm h-100 d-flex flex-column justify-content-between">
+                        <label class="text-muted small d-block mb-2 fw-bold text-uppercase" style="letter-spacing: 1px;">4to Trimestre</label>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span class="text-muted">Asignado:</span>
+                                <span class="fw-bold">${{ stats.q4_asignacion|localize }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between small">
+                                <span class="text-muted">Refuerzo:</span>
+                                <span class="fw-bold text-info">${{ stats.q4_refuerzo|localize }}</span>
+                            </div>
+                        </div>
+                        <div class="pt-2 border-top mt-auto">
+                            <div class="fw-bold text-primary" style="font-size: 1rem;">Total: ${{ stats.q4_total|localize }}</div>
+                        </div>
                     </div>
                 </div>
             </div>

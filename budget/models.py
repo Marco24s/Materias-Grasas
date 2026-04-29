@@ -81,7 +81,7 @@ class BudgetClassification(models.Model):
 
 class BudgetCredit(models.Model):
     fiscal_year = models.ForeignKey(BudgetFiscalYear, on_delete=models.PROTECT, related_name="credits", verbose_name="Ejercicio")
-    custom_class = models.ForeignKey(BudgetClassification, on_delete=models.SET_NULL, null=True, blank=True, related_name='credits', verbose_name="Clasificación Especial")
+    custom_classes = models.ManyToManyField(BudgetClassification, blank=True, related_name='credits', verbose_name="Clasificaciones Especiales")
     credit_type = models.ForeignKey(BudgetCreditType, on_delete=models.PROTECT, null=True, blank=True, related_name='credits', verbose_name="Tipo de Crédito")
     ff = models.ForeignKey(BudgetFF, on_delete=models.PROTECT, verbose_name="FF", null=True, blank=True)
     programa = models.ForeignKey(BudgetProg, on_delete=models.PROTECT, verbose_name="Programa", null=True, blank=True)

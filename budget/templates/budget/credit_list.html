@@ -36,11 +36,11 @@
                     </td>
                     <td><span class="fw-bold">{{ credit.subprog.code }}</span></td>
                     <td style="max-width: 200px;">
-                        <div class="text-truncate fw-semibold" title="{{ credit.actividad }}" style="font-size: 0.8rem;">{{ credit.actividad }}</div>
+                        <div class="text-truncate fw-semibold" title="{{ credit.programa.name }}" style="font-size: 0.8rem;">{{ credit.programa.name }}</div>
                         <small class="text-muted" style="font-size: 0.7rem;">{{ credit.ppp_inc.code }} / {{ credit.pp_inc.code }}</small>
                     </td>
                     <td>
-                        <div class="fw-bold text-primary">{{ credit.inc.code|default:"--" }}-{{ credit.ppai.code|default:"000" }}</div>
+                        <div class="fw-bold text-primary">{{ credit.inc.code|default:"--" }}-{{ credit.ppp_inc.code|default:"000" }}</div>
                         <small class="text-muted" style="font-size: 0.7rem;">{{ credit.pre_inc.code|default:"" }}</small>
                     </td>
                     <td class="text-end fw-bold text-dark" style="white-space: nowrap;">
@@ -126,7 +126,7 @@
             <div>
                 <h6 class="fw-bold mb-1">Información Presupuestaria</h6>
                 <p class="small mb-0 opacity-75">
-                    Cada línea representa una asignación específica. La combinación de FF, Subprograma, Actividad, Inciso y Partida Parcial debe ser única según el Clasificador del Gasto.
+                    Cada línea representa una asignación específica. La combinación de FF, Subprograma, Programa, Inciso y Partida Parcial debe ser única según el Clasificador del Gasto.
                 </p>
             </div>
         </div>

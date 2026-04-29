@@ -53,11 +53,12 @@ def dashboard(request):
         stats['available_to_allocate'] = stats['total_credit'] - stats['total_allocated']
         stats['available_to_execute'] = stats['total_allocated'] - stats['total_commitment']
         
-        # Agregación por trimestre
-        stats['q1_total'] = credits.aggregate(Sum('q1_amount'))['q1_amount__sum'] or 0
-        stats['q2_total'] = credits.aggregate(Sum('q2_amount'))['q2_amount__sum'] or 0
-        stats['q3_total'] = credits.aggregate(Sum('q3_amount'))['q3_amount__sum'] or 0
-        stats['q4_total'] = credits.aggregate(Sum('q4_amount'))['q4_amount__sum'] or 0
+        # Agregación por trimestre y tipo
+        for q in ['q1', 'q2', 'q3', 'q4']:
+            field = f'{q}_amount'
+            stats[f'{q}_total'] = credits.aggregate(Sum(field))[f'{field}__sum'] or 0
+            stats[f'{q}_asignacion'] = credits.filter(credit_type__code='ASIGNACION').aggregate(Sum(field))[f'{field}__sum'] or 0
+            stats[f'{q}_refuerzo'] = credits.filter(credit_type__code='REFUERZO').aggregate(Sum(field))[f'{field}__sum'] or 0
 
         # Cálculo de anchos para la barra de progreso trimestral (basado en compromisos)
         total_q = stats['total_credit']
@@ -690,15 +691,9 @@ def classification_assign(request, pk):
     if request.method == 'POST':
         form = BudgetClassificationAssignForm(request.POST, classification=c)
         if form.is_valid():
+            # Assign this classification to the selected credits (M2M)
             selected_credits = form.cleaned_data['credits']
-            
-            # Remove this classification from any credits that aren't selected anymore
-            c.credits.exclude(id__in=selected_credits).update(custom_class=None)
-            
-            # Assing this classification to the selected credits
-            for credit in selected_credits:
-                credit.custom_class = c
-                credit.save(update_fields=['custom_class'])
+            c.credits.set(selected_credits)
                 
             messages.success(request, f"Créditos asignados a {c.name}.")
             return redirect('budget:classification_list')

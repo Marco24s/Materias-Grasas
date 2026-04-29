@@ -179,9 +179,14 @@ class BudgetClassificationForm(forms.ModelForm):
             'notes': 'Notas / Descripción'
         }
 
+class BudgetCreditMultipleChoiceField(forms.ModelMultipleChoiceField):
+    def label_from_instance(self, obj):
+        amount_str = f"{obj.total_amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"{obj} — [Total: ${amount_str}]"
+
 class BudgetClassificationAssignForm(forms.Form):
     # This form is used from the classification perspective to pull credits into itself
-    credits = forms.ModelMultipleChoiceField(
+    credits = BudgetCreditMultipleChoiceField(
         queryset=BudgetCredit.objects.all(),
         widget=forms.CheckboxSelectMultiple,
         required=False,

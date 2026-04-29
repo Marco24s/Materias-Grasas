@@ -15,10 +15,6 @@
 </div>
 
 <div class="card card-stats p-4">
-    <div class="alert alert-warning mb-4">
-        <i class="fa-solid fa-circle-info me-2"></i><strong>Nota Importante:</strong> 
-        Un crédito solo puede pertenecer a UNA clasificación especial a la vez. Si selecciona un crédito que ya pertenece a otra clasificación, este será movido automáticamente a "{{ classification.name }}".
-    </div>
     
     <form method="post" action="">
         {% csrf_token %}
