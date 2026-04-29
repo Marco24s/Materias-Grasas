@@ -15,7 +15,6 @@ urlpatterns = [
     # Créditos (AA.PP.)
     path('credits/', views.credit_list, name='credit_list'),
     path('credits/create/', views.credit_create, name='credit_create'),
-    path('credits/assign-types/', views.credit_bulk_type, name='credit_bulk_type'),
     path('credits/type-log/', views.credit_type_log, name='credit_type_log'),
     path('credits/<int:pk>/unassign-type/', views.credit_unassign_type, name='credit_unassign_type'),
     path('credits/<int:pk>/detail/', views.credit_detail, name='credit_detail'),

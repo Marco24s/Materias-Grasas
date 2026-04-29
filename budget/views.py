@@ -206,6 +206,7 @@ def credit_create(request):
             try:
                 services.create_credit(
                     fiscal_year=form.cleaned_data['fiscal_year'],
+                    credit_type=form.cleaned_data.get('credit_type'),
                     ff=form.cleaned_data['ff'], 
                     programa=form.cleaned_data['programa'],
                     subprog=form.cleaned_data['subprog'],
@@ -247,47 +248,6 @@ def credit_delete(request, pk):
         'cancel_url': 'budget:credit_list'
     })
 
-def credit_bulk_type(request):
-    """Allows bulk assignment of CreditType to existing credits from a single table."""
-    if not is_admin(request.user): return redirect('budget:credit_list')
-
-    fiscal_year = BudgetFiscalYear.objects.filter(status='OPEN').first()
-    credits = BudgetCredit.objects.filter(fiscal_year=fiscal_year).select_related('credit_type', 'ff', 'fiscal_year').order_by('ff__code') if fiscal_year else []
-    credit_types = BudgetCreditType.objects.all().order_by('code')
-
-    if request.method == 'POST':
-        updated = 0
-        for credit in credits:
-            key = f'type_{credit.pk}'
-            type_id = request.POST.get(key)
-            new_type = BudgetCreditType.objects.filter(pk=type_id).first() if type_id else None
-            if credit.credit_type != new_type:
-                # Determine action for the log
-                if credit.credit_type is None:
-                    action = BudgetCreditTypeLog.ACTION_ASSIGN
-                elif new_type is None:
-                    action = BudgetCreditTypeLog.ACTION_UNASSIGN
-                else:
-                    action = BudgetCreditTypeLog.ACTION_CHANGE
-
-                BudgetCreditTypeLog.objects.create(
-                    credit=credit,
-                    action=action,
-                    previous_type=credit.credit_type,
-                    new_type=new_type,
-                    user=request.user
-                )
-                credit.credit_type = new_type
-                credit.save(update_fields=['credit_type'])
-                updated += 1
-        messages.success(request, f"Se actualizaron {updated} crédito(s). Los cambios quedaron registrados en el historial.")
-        return redirect('budget:credit_list')
-
-    return render(request, 'budget/credit_bulk_type.html', {
-        'credits': credits,
-        'credit_types': credit_types,
-        'fiscal_year': fiscal_year
-    })
 
 def credit_unassign_type(request, pk):
     """Removes the credit_type from a single credit with an optional reason, logging the event."""
@@ -301,7 +261,13 @@ def credit_unassign_type(request, pk):
     def parse_currency(value):
         if not value:
             return None
-        raw = value.replace(' ', '').replace('.', '').replace(',', '.')
+        value = str(value).replace(' ', '')
+        if ',' in value:
+            # Formato español: los puntos son miles, la coma es decimal
+            raw = value.replace('.', '').replace(',', '.')
+        else:
+            # Ya limpio por JS o formato punto-decimal: el punto es decimal
+            raw = value
         return Decimal(raw)
 
     if request.method == 'POST':
@@ -343,17 +309,19 @@ def credit_unassign_type(request, pk):
 
         notes = ' | '.join(details) if details else None
 
-        BudgetCreditTypeLog.objects.create(
+        services.unassign_credit_type(
             credit=credit,
-            action=BudgetCreditTypeLog.ACTION_UNASSIGN,
-            previous_type=credit.credit_type,
-            new_type=None,
+            unassign_amount=unassign_amount,
             user=request.user,
             notes=notes
         )
-        credit.credit_type = None
-        credit.save(update_fields=['credit_type'])
-        messages.success(request, f"Tipo de crédito removido de {credit}. El evento quedó registrado.")
+        
+        success_msg = f"Tipo de crédito removido de {credit}."
+        if unassign_amount and unassign_amount > 0:
+            formatted_amount = f"${unassign_amount:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            success_msg += f" Se descontaron {formatted_amount} del total."
+            
+        messages.success(request, success_msg)
         return redirect('budget:credit_list')
 
     return render(request, 'budget/credit_unassign_confirm.html', {

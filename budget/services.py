@@ -18,7 +18,7 @@ def create_fiscal_year(year, notes=""):
 
 @transaction.atomic
 def create_credit(fiscal_year, ff, programa, subprog, inc, ppp_inc, pp_inc, pre_inc, 
-                  incisos_agrupado, q1=0, q2=0, q3=0, q4=0, notes=""):
+                  incisos_agrupado, credit_type=None, q1=0, q2=0, q3=0, q4=0, notes=""):
     """
     Registra un nuevo crédito presupuestario utilizando objetos de catálogo.
     """
@@ -27,6 +27,7 @@ def create_credit(fiscal_year, ff, programa, subprog, inc, ppp_inc, pp_inc, pre_
     
     return BudgetCredit.objects.create(
         fiscal_year=fiscal_year,
+        credit_type=credit_type,
         ff=ff, programa=programa, subprog=subprog,
         inc=inc, ppp_inc=ppp_inc, pp_inc=pp_inc, pre_inc=pre_inc,
         incisos_agrupado=incisos_agrupado,
@@ -214,3 +215,42 @@ def get_unit_execution_report(fiscal_year):
             'percent_executed': (tc / total_allocated * 100) if total_allocated > 0 else 0
         })
     return report
+
+@transaction.atomic
+def unassign_credit_type(credit, unassign_amount, user, notes=""):
+    """
+    Remueve el tipo de crédito y descuenta el monto de los trimestres (Q4 -> Q1).
+    Registra la acción en el historial.
+    """
+    if unassign_amount and unassign_amount > 0:
+        # Descontamos de los trimestres de atrás hacia adelante
+        remaining = unassign_amount
+        for q_attr in ['q4_amount', 'q3_amount', 'q2_amount', 'q1_amount']:
+            if remaining <= 0: break
+            current_q = getattr(credit, q_attr)
+            if current_q >= remaining:
+                setattr(credit, q_attr, current_q - remaining)
+                remaining = 0
+            else:
+                remaining -= current_q
+                setattr(credit, q_attr, 0)
+        
+        # El save() del modelo BudgetCredit recalculará el total_amount
+    
+    # Mantenemos el tipo (No lo limpiamos para permitir múltiples desasignaciones parciales)
+    previous_type = credit.credit_type
+    # credit.credit_type = None  <-- Se elimina esta línea
+    credit.save()
+    
+    # Creamos el log de auditoría
+    from .models import BudgetCreditTypeLog
+    BudgetCreditTypeLog.objects.create(
+        credit=credit,
+        action=BudgetCreditTypeLog.ACTION_UNASSIGN,
+        previous_type=previous_type,
+        new_type=previous_type, # El tipo se mantiene
+        user=user,
+        notes=notes
+    )
+    
+    return credit
