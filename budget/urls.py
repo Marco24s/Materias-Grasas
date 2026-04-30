@@ -48,4 +48,9 @@ urlpatterns = [
     path('classifications/<int:pk>/delete/', views.classification_delete, name='classification_delete'),
     path('classifications/<int:pk>/assign/', views.classification_assign, name='classification_assign'),
     path('classifications/<int:pk>/detail/', views.classification_detail, name='classification_detail'),
+
+    # Compensaciones de Partidas
+    path('compensaciones/', views.compensacion_list, name='compensacion_list'),
+    path('compensaciones/create/', views.compensacion_create, name='compensacion_create'),
+    path('compensaciones/<int:pk>/approve/', views.compensacion_approve, name='compensacion_approve'),
 ]

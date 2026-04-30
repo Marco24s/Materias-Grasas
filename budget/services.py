@@ -6,7 +6,7 @@ from .models import (
     BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetProg,
     BudgetPPPInc, BudgetPPInc, BudgetPreInc, BudgetIncisosAgrupado,
     BudgetInc, BudgetCredit, BudgetAllocation, BudgetExecution,
-    InsufficientFundsError
+    BudgetCreditTypeLog, BudgetCompensacion, InsufficientFundsError
 )
 
 @transaction.atomic
@@ -254,3 +254,72 @@ def unassign_credit_type(credit, unassign_amount, user, notes=""):
     )
     
     return credit
+
+@transaction.atomic
+def request_compensacion(fiscal_year, programa, source_credit, target_params, q_amounts, user, notes=""):
+    """
+    Crea una solicitud de compensación validando fondos disponibles.
+    """
+    if source_credit.programa != programa:
+        raise ValidationError("El crédito de origen no pertenece al programa seleccionado.")
+    
+    q1, q2, q3, q4 = q_amounts
+    if q1 > source_credit.q1_amount or q2 > source_credit.q2_amount or q3 > source_credit.q3_amount or q4 > source_credit.q4_amount:
+        raise ValidationError("Fondos insuficientes en uno o más trimestres del crédito de origen.")
+    
+    return BudgetCompensacion.objects.create(
+        fiscal_year=fiscal_year,
+        programa=programa,
+        source_credit=source_credit,
+        **target_params,
+        q1_amount=q1, q2_amount=q2, q3_amount=q3, q4_amount=q4,
+        requested_by=user,
+        notes=notes
+    )
+
+@transaction.atomic
+def execute_compensacion(compensacion_id, user):
+    """
+    Ejecuta el movimiento de fondos de forma atómica.
+    """
+    comp = BudgetCompensacion.objects.select_for_update().get(pk=compensacion_id)
+    
+    if comp.status != 'PENDIENTE':
+        raise ValidationError("Esta compensación ya ha sido procesada o ejecutada.")
+    
+    source = comp.source_credit
+    
+    # 1. Restar de origen
+    source.q1_amount -= comp.q1_amount
+    source.q2_amount -= comp.q2_amount
+    source.q3_amount -= comp.q3_amount
+    source.q4_amount -= comp.q4_amount
+    source.save()
+    
+    # 2. Buscar o crear destino
+    target, created = BudgetCredit.objects.get_or_create(
+        fiscal_year=comp.fiscal_year,
+        ff=comp.target_ff,
+        programa=comp.programa,
+        subprog=comp.target_subprog,
+        inc=comp.target_inc,
+        ppp_inc=comp.target_ppp_inc,
+        pp_inc=comp.target_pp_inc,
+        pre_inc=comp.target_pre_inc,
+        incisos_agrupado=comp.target_incisos_agrupado,
+        defaults={'credit_type': source.credit_type}
+    )
+    
+    # 3. Sumar a destino
+    target.q1_amount += comp.q1_amount
+    target.q2_amount += comp.q2_amount
+    target.q3_amount += comp.q3_amount
+    target.q4_amount += comp.q4_amount
+    target.save()
+    
+    # 4. Marcar como ejecutada
+    comp.status = 'EJECUTADO'
+    comp.approved_by = user
+    comp.save()
+    
+    return comp

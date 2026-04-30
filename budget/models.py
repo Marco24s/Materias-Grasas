@@ -100,7 +100,7 @@ class BudgetCredit(models.Model):
     class Meta:
         verbose_name = "Crédito Presupuestario"
         verbose_name_plural = "Créditos Presupuestarios"
-        unique_together = ('fiscal_year', 'ff', 'programa', 'subprog', 'inc', 'ppp_inc', 'pp_inc', 'pre_inc', 'incisos_agrupado')
+        unique_together = ('fiscal_year', 'credit_type', 'ff', 'programa', 'subprog', 'inc', 'ppp_inc', 'pp_inc', 'pre_inc', 'incisos_agrupado')
 
     def __str__(self):
         parts = []
@@ -126,13 +126,59 @@ class BudgetAllocation(models.Model):
     class Meta: 
         verbose_name = "Distribución de Crédito"
         verbose_name_plural = "Distribuciones de Crédito"
-        unique_together = ('credit', 'unit')
     
     @property
     def available_amount(self):
         return self.allocated_amount - self.spent_amount
 
-    def __str__(self): return f"{self.unit.name} - ${self.allocated_amount}"
+    def __str__(self):
+        return f"Ejecución {self.reference_code} - {self.allocation.unit.name}"
+
+class BudgetCompensacion(models.Model):
+    STATUS_CHOICES = [
+        ('PENDIENTE', 'Pendiente'),
+        ('APROBADO', 'Aprobado (Listo para Ejecutar)'),
+        ('RECHAZADO', 'Rechazado'),
+        ('EJECUTADO', 'Ejecutado'),
+    ]
+
+    fiscal_year = models.ForeignKey(BudgetFiscalYear, on_delete=models.CASCADE, verbose_name="Ejercicio")
+    programa = models.ForeignKey(BudgetProg, on_delete=models.CASCADE, verbose_name="Programa")
+    source_credit = models.ForeignKey(BudgetCredit, on_delete=models.CASCADE, related_name='compensaciones_salida', verbose_name="Crédito de Origen")
+    
+    # Destino (pueden ser los mismos componentes u otros)
+    target_ff = models.ForeignKey(BudgetFF, on_delete=models.PROTECT, verbose_name="FF Destino")
+    target_subprog = models.ForeignKey(BudgetSubprog, on_delete=models.PROTECT, verbose_name="Subprog Destino")
+    target_inc = models.ForeignKey(BudgetInc, on_delete=models.PROTECT, verbose_name="Inciso Destino")
+    target_ppp_inc = models.ForeignKey(BudgetPPPInc, on_delete=models.PROTECT, verbose_name="PPAL Destino")
+    target_pp_inc = models.ForeignKey(BudgetPPInc, on_delete=models.PROTECT, verbose_name="Parcial Destino")
+    target_pre_inc = models.ForeignKey(BudgetPreInc, on_delete=models.PROTECT, verbose_name="SubParcial Destino")
+    target_incisos_agrupado = models.ForeignKey(BudgetIncisosAgrupado, on_delete=models.PROTECT, verbose_name="Moneda Destino")
+    
+    q1_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto T1")
+    q2_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto T2")
+    q3_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto T3")
+    q4_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto T4")
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDIENTE', verbose_name="Estado")
+    notes = models.TextField(blank=True, null=True, verbose_name="Observaciones")
+    
+    requested_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, related_name='compensaciones_solicitadas', verbose_name="Solicitado por")
+    approved_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='compensaciones_aprobadas', verbose_name="Aprobado por")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Compensación de Partida"
+        verbose_name_plural = "Compensaciones de Partidas"
+
+    def __str__(self):
+        return f"Compensación #{self.id} - {self.programa.code} ({self.total_amount})"
+
+    @property
+    def total_amount(self):
+        return self.q1_amount + self.q2_amount + self.q3_amount + self.q4_amount
 
 class BudgetExecution(models.Model):
     allocation = models.ForeignKey(BudgetAllocation, on_delete=models.PROTECT, related_name="executions", verbose_name="Distribución / Techo")

@@ -1,0 +1,39 @@
+{% extends "budget/form_base.html" %}
+{% load l10n %}
+
+{% block budget_content %}
+{{ block.super }}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const amountsMap = {{ amounts_map|safe }};
+    const allocationSelect = document.getElementById('id_allocation');
+    const useTotalCheckbox = document.getElementById('id_use_total_amount');
+    const amountInput = document.getElementById('id_commitment_amount');
+
+    function updateTotalAmount() {
+        if (useTotalCheckbox.checked) {
+            const selectedId = allocationSelect.value;
+            if (selectedId && amountsMap[selectedId] !== undefined) {
+                // Convert to Spanish format (dots for thousands, comma for decimal)
+                // But the input mask might expect something specific.
+                // Assuming the currency-input mask handles raw numbers or standard decimals.
+                const val = amountsMap[selectedId];
+                amountInput.value = val.toFixed(2).replace('.', ',');
+                
+                // Trigger change event for any masks
+                amountInput.dispatchEvent(new Event('change', { bubbles: true }));
+                amountInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }
+    }
+
+    useTotalCheckbox.addEventListener('change', updateTotalAmount);
+    allocationSelect.addEventListener('change', function() {
+        if (useTotalCheckbox.checked) {
+            updateTotalAmount();
+        }
+    });
+});
+</script>
+{% endblock %}

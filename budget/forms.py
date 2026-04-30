@@ -5,7 +5,7 @@ from .models import (
     BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetProg,
     BudgetPPPInc, BudgetPPInc, BudgetPreInc, BudgetIncisosAgrupado,
     BudgetInc, BudgetCredit, BudgetClassification, BudgetCreditType,
-    BudgetAllocation, BudgetExecution
+    BudgetAllocation, BudgetExecution, BudgetCompensacion
 )
 
 class BudgetFiscalYearForm(forms.ModelForm):
@@ -75,10 +75,10 @@ class BudgetCreditForm(forms.ModelForm):
             'pp_inc': 'PARCIAL',
             'pre_inc': 'SUBPC',
             'incisos_agrupado': 'MONEDA',
-            'q1_amount': 'Monto 1er Cuatrimestre',
-            'q2_amount': 'Monto 2do Cuatrimestre',
-            'q3_amount': 'Monto 3er Cuatrimestre',
-            'q4_amount': 'Monto 4to Cuatrimestre',
+            'q1_amount': 'Monto 1er Trimestre',
+            'q2_amount': 'Monto 2do Trimestre',
+            'q3_amount': 'Monto 3er Trimestre',
+            'q4_amount': 'Monto 4to Trimestre',
             'notes': 'Observaciones'
         }
         widgets = {
@@ -121,10 +121,26 @@ class BudgetAllocationForm(forms.ModelForm):
             available_amount=F('total_amount') - F('allocated_total')
         ).order_by('-fiscal_year__year', 'ff__code')
 
+class AllocationChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        available = obj.available_amount
+        av_str = f"{available:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"{obj.unit.name} - [Disp: ${av_str}]"
+
 class BudgetExecutionCommitmentForm(forms.ModelForm):
+    allocation = AllocationChoiceField(
+        queryset=BudgetAllocation.objects.all(),
+        label="Distribución / Techo Presupuestario",
+        help_text="Seleccione la distribución de crédito contra la cual se imputará el gasto."
+    )
+    use_total_amount = forms.BooleanField(
+        required=False, 
+        label="¿Comprometer el total disponible?",
+        help_text="Si se marca, el monto se completará automáticamente con el saldo restante."
+    )
     class Meta:
         model = BudgetExecution
-        fields = ['allocation', 'reference_code', 'external_id', 'commitment_amount', 'commitment_date']
+        fields = ['allocation', 'use_total_amount', 'reference_code', 'external_id', 'commitment_amount', 'commitment_date']
         labels = {
             'allocation': 'Distribución / Techo Presupuestario',
             'reference_code': 'Número de Expediente / Comprobante',
@@ -205,3 +221,26 @@ class BudgetClassificationAssignForm(forms.Form):
             self.fields['credits'].queryset = BudgetCredit.objects.all().select_related(
                 'fiscal_year', 'ff', 'programa', 'subprog', 'inc', 'ppp_inc', 'pp_inc', 'pre_inc'
             ).order_by('-fiscal_year__year')
+
+class BudgetCompensacionForm(forms.ModelForm):
+    class Meta:
+        model = BudgetCompensacion
+        fields = [
+            'fiscal_year', 'programa', 'source_credit',
+            'target_ff', 'target_subprog', 'target_inc', 'target_ppp_inc', 
+            'target_pp_inc', 'target_pre_inc', 'target_incisos_agrupado',
+            'q1_amount', 'q2_amount', 'q3_amount', 'q4_amount', 'notes'
+        ]
+        widgets = {
+            'q1_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
+            'q2_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
+            'q3_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
+            'q4_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
+        }
+        localized_fields = ('q1_amount', 'q2_amount', 'q3_amount', 'q4_amount')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['source_credit'].queryset = BudgetCredit.objects.filter(total_amount__gt=0).order_by('programa__code', 'ff__code')
+        self.fields['source_credit'].label = "Crédito de Origen (AA.PP.)"
+        self.fields['programa'].help_text = "La compensación solo se permite entre partidas del mismo programa."

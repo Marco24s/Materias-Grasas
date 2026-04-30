@@ -7,17 +7,15 @@ from .models import (
     BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetProg,
     BudgetPPPInc, BudgetPPInc, BudgetPreInc, BudgetIncisosAgrupado,
     BudgetInc, BudgetCredit, BudgetAllocation, BudgetExecution,
-    BudgetClassification, BudgetCreditType, BudgetCreditTypeLog, InsufficientFundsError
+    BudgetClassification, BudgetCreditType, BudgetCreditTypeLog, BudgetCompensacion, InsufficientFundsError
 )
 from .forms import (
     BudgetFiscalYearForm, BudgetCreditForm, BudgetAllocationForm,
     BudgetExecutionCommitmentForm, BudgetExecutionAccrualForm, 
-    BudgetExecutionPaymentForm,
-    BudgetFFForm, BudgetSubprogForm, BudgetProgForm,
+    BudgetExecutionPaymentForm, BudgetClassificationForm, BudgetClassificationAssignForm,
+    BudgetCompensacionForm, BudgetFFForm, BudgetSubprogForm, BudgetProgForm,
     BudgetPPPIncForm, BudgetPPIncForm, BudgetPreIncForm,
-    BudgetIncisosAgrupadoForm, BudgetIncForm,
-    BudgetClassificationForm, BudgetClassificationAssignForm,
-    BudgetCreditTypeForm
+    BudgetIncisosAgrupadoForm, BudgetIncForm, BudgetCreditTypeForm
 )
 from . import services
 
@@ -74,6 +72,17 @@ def dashboard(request):
         rem_c = max(0, rem_c - q3_t)
         stats['q4_fill'] = (min(rem_c, q4_t) / q4_t * 100) if q4_t > 0 else 0
         
+        # Cálculo de anchos para la barra de DISTRIBUCIÓN (Techos)
+        rem_a = stats['total_allocated']
+        stats['q1_alloc_fill'] = (min(rem_a, q1_t) / q1_t * 100) if q1_t > 0 else 0
+        rem_a = max(0, rem_a - q1_t)
+        stats['q2_alloc_fill'] = (min(rem_a, q2_t) / q2_t * 100) if q2_t > 0 else 0
+        rem_a = max(0, rem_a - q2_t)
+        stats['q3_alloc_fill'] = (min(rem_a, q3_t) / q3_t * 100) if q3_t > 0 else 0
+        rem_a = max(0, rem_a - q3_t)
+        stats['q4_alloc_fill'] = (min(rem_a, q4_t) / q4_t * 100) if q4_t > 0 else 0
+
+        # Ancho relativo de cada segmento (trimestre) respecto al total
         stats['q1_seg'] = (q1_t / total_q * 100) if total_q > 0 else 0
         stats['q2_seg'] = (q2_t / total_q * 100) if total_q > 0 else 0
         stats['q3_seg'] = (q3_t / total_q * 100) if total_q > 0 else 0
@@ -198,6 +207,63 @@ def credit_detail(request, pk):
         'q_segs': [q1_seg, q2_seg, q3_seg, q4_seg],
     }
     return render(request, 'budget/credit_detail.html', context)
+
+def compensacion_list(request):
+    if not is_admin(request.user): return redirect('budget:dashboard')
+    compensaciones = BudgetCompensacion.objects.all().order_by('-created_at').select_related(
+        'fiscal_year', 'programa', 'source_credit', 'requested_by'
+    )
+    return render(request, 'budget/compensacion_list.html', {'compensaciones': compensaciones})
+
+def compensacion_create(request):
+    if not is_admin(request.user): return redirect('budget:dashboard')
+    if request.method == 'POST':
+        form = BudgetCompensacionForm(request.POST)
+        if form.is_valid():
+            try:
+                target_params = {
+                    'target_ff': form.cleaned_data['target_ff'],
+                    'target_subprog': form.cleaned_data['target_subprog'],
+                    'target_inc': form.cleaned_data['target_inc'],
+                    'target_ppp_inc': form.cleaned_data['target_ppp_inc'],
+                    'target_pp_inc': form.cleaned_data['target_pp_inc'],
+                    'target_pre_inc': form.cleaned_data['target_pre_inc'],
+                    'target_incisos_agrupado': form.cleaned_data['target_incisos_agrupado'],
+                }
+                q_amounts = (
+                    form.cleaned_data['q1_amount'], form.cleaned_data['q2_amount'],
+                    form.cleaned_data['q3_amount'], form.cleaned_data['q4_amount']
+                )
+                services.request_compensacion(
+                    fiscal_year=form.cleaned_data['fiscal_year'],
+                    programa=form.cleaned_data['programa'],
+                    source_credit=form.cleaned_data['source_credit'],
+                    target_params=target_params,
+                    q_amounts=q_amounts,
+                    user=request.user,
+                    notes=form.cleaned_data['notes']
+                )
+                messages.success(request, "Solicitud de compensación creada exitosamente.")
+                return redirect('budget:compensacion_list')
+            except Exception as e:
+                error_msg = ", ".join(e.messages) if hasattr(e, 'messages') else str(e)
+                messages.error(request, f"Error: {error_msg}")
+    else:
+        form = BudgetCompensacionForm()
+    return render(request, 'budget/form_base.html', {'form': form, 'title': 'Solicitar Compensación de Partidas'})
+
+def compensacion_approve(request, pk):
+    if not is_admin(request.user): return redirect('budget:dashboard')
+    compensacion = get_object_or_404(BudgetCompensacion, pk=pk)
+    if request.method == 'POST':
+        try:
+            services.execute_compensacion(compensacion.id, request.user)
+            messages.success(request, f"Compensación #{compensacion.id} ejecutada con éxito.")
+        except Exception as e:
+            error_msg = ", ".join(e.messages) if hasattr(e, 'messages') else str(e)
+            messages.error(request, f"Error: {error_msg}")
+        return redirect('budget:compensacion_list')
+    return render(request, 'budget/compensacion_confirm.html', {'compensacion': compensacion})
 
 def credit_create(request):
     if not is_admin(request.user): return redirect('budget:credit_list')
@@ -415,6 +481,8 @@ def execution_detail(request, pk):
     surplus = execution.commitment_amount - execution.accrued_amount if execution.commitment_amount > execution.accrued_amount else 0
     return render(request, 'budget/execution_detail.html', {'execution': execution, 'surplus': surplus})
 
+import json
+
 def execution_step_commitment(request):
     if request.method == 'POST':
         form = BudgetExecutionCommitmentForm(request.POST)
@@ -437,15 +505,25 @@ def execution_step_commitment(request):
                 error_msg = ", ".join(e.messages) if hasattr(e, 'messages') else str(e)
                 messages.error(request, f"Ocurrió un error inesperado: {error_msg}")
     else:
-        form = BudgetExecutionCommitmentForm()
+        initial_data = {}
+        alloc_id = request.GET.get('allocation')
+        if alloc_id:
+            initial_data['allocation'] = alloc_id
+            
+        form = BudgetExecutionCommitmentForm(initial=initial_data)
         if not is_admin(request.user):
             form.fields['allocation'].queryset = BudgetAllocation.objects.filter(unit=request.user.unit)
             
+    # Preparar el mapeo de montos para el JS
+    allocations = form.fields['allocation'].queryset
+    amounts_map = {a.id: float(a.available_amount) for a in allocations}
+            
     help_text = "Para registrar un compromiso, primero debe existir una Distribución de Crédito (Techo) asignada a la unidad. Si no ve opciones en el desplegable, contacte a Logística para la distribución de fondos."
-    return render(request, 'budget/form_base.html', {
+    return render(request, 'budget/execution_commitment_form.html', {
         'form': form, 
         'title': 'Paso 1: Registro de Compromiso',
-        'help_text': help_text
+        'help_text': help_text,
+        'amounts_map': json.dumps(amounts_map)
     })
 
 def execution_step_accrual(request, pk):

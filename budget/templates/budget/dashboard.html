@@ -150,8 +150,11 @@
                 <a href="{% url 'budget:allocation_create' %}" class="btn btn-outline-dark btn-sm text-start py-2">
                    <i class="fa-solid fa-share-nodes me-2"></i> Distribuir a Unidad
                 </a>
-                <a href="{% url 'budget:classification_list' %}" class="btn btn-outline-info btn-sm text-start py-2 mt-2 border-2 text-dark">
+                <a href="{% url 'budget:classification_list' %}" class="btn btn-outline-info btn-sm text-start py-2 mt-1 border-2 text-dark">
                     <i class="fa-solid fa-umbrella text-info me-2"></i> <strong>Mis Clasificaciones</strong> Especiales
+                </a>
+                <a href="{% url 'budget:compensacion_list' %}" class="btn btn-outline-primary btn-sm text-start py-2 mt-2 border-2 border-primary fw-bold">
+                    <i class="fa-solid fa-shuffle me-2"></i> Compensación de Partidas
                 </a>
             </div>
         </div>
@@ -248,6 +251,36 @@
                         <div class="pt-2 border-top mt-auto">
                             <div class="fw-bold text-primary" style="font-size: 1rem;">Total: ${{ stats.q4_total|localize }}</div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Barra de Distribución a Unidades (Techos) -->
+            <div class="px-2 mb-4">
+                <div class="d-flex justify-content-between small text-muted mb-1">
+                    <span>Progreso de Distribución a Unidades (Techos)</span>
+                    <span>Total Distribuido: <strong class="text-success">${{ stats.total_allocated|localize }}</strong></span>
+                </div>
+                <div class="progress shadow-sm" style="height: 12px; background: rgba(0,0,0,0.05); border-radius: 6px;">
+                    <!-- Segmento T1 -->
+                    <div class="d-flex" style="width: {{ stats.q1_seg|stringformat:'f' }}%; border-right: 2px solid white;">
+                        <div class="bg-success h-100" style="width: {{ stats.q1_alloc_fill|stringformat:'f' }}%;" title="T1 Distribuido: {{ stats.q1_alloc_fill|floatformat:1 }}%"></div>
+                        <div class="bg-secondary bg-opacity-10 h-100 flex-grow-1"></div>
+                    </div>
+                    <!-- Segmento T2 -->
+                    <div class="d-flex" style="width: {{ stats.q2_seg|stringformat:'f' }}%; border-right: 2px solid white;">
+                        <div class="bg-success h-100" style="width: {{ stats.q2_alloc_fill|stringformat:'f' }}%;" title="T2 Distribuido: {{ stats.q2_alloc_fill|floatformat:1 }}%"></div>
+                        <div class="bg-secondary bg-opacity-10 h-100 flex-grow-1"></div>
+                    </div>
+                    <!-- Segmento T3 -->
+                    <div class="d-flex" style="width: {{ stats.q3_seg|stringformat:'f' }}%; border-right: 2px solid white;">
+                        <div class="bg-success h-100" style="width: {{ stats.q3_alloc_fill|stringformat:'f' }}%;" title="T3 Distribuido: {{ stats.q3_alloc_fill|floatformat:1 }}%"></div>
+                        <div class="bg-secondary bg-opacity-10 h-100 flex-grow-1"></div>
+                    </div>
+                    <!-- Segmento T4 -->
+                    <div class="d-flex" style="width: {{ stats.q4_seg|stringformat:'f' }}%;">
+                        <div class="bg-success h-100" style="width: {{ stats.q4_alloc_fill|stringformat:'f' }}%;" title="T4 Distribuido: {{ stats.q4_alloc_fill|floatformat:1 }}%"></div>
+                        <div class="bg-secondary bg-opacity-10 h-100 flex-grow-1"></div>
                     </div>
                 </div>
             </div>
