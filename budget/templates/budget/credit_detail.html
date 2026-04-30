@@ -159,11 +159,16 @@
             </div>
         </div>
 
-        <div class="d-grid">
+        {% if is_admin %}
+        <div class="d-grid gap-2">
             <a href="{% url 'budget:allocation_create' %}?credit={{ credit.id }}" class="btn btn-outline-primary rounded-pill py-2 shadow-sm">
                 <i class="fa-solid fa-share-nodes me-2"></i>Nueva Distribución
             </a>
+            <a href="{% url 'budget:compensacion_create' %}?source_credit={{ credit.id }}" class="btn btn-outline-warning rounded-pill py-2 shadow-sm">
+                <i class="fa-solid fa-money-bill-transfer me-2"></i>Cambio de Inciso
+            </a>
         </div>
+        {% endif %}
     </div>
 </div>
 

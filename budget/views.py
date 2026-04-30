@@ -205,6 +205,7 @@ def credit_detail(request, pk):
         'execution_percent': execution_percent,
         'q_fills': [q1_fill, q2_fill, q3_fill, q4_fill],
         'q_segs': [q1_seg, q2_seg, q3_seg, q4_seg],
+        'is_admin': is_admin(request.user),
     }
     return render(request, 'budget/credit_detail.html', context)
 
@@ -249,7 +250,27 @@ def compensacion_create(request):
                 error_msg = ", ".join(e.messages) if hasattr(e, 'messages') else str(e)
                 messages.error(request, f"Error: {error_msg}")
     else:
-        form = BudgetCompensacionForm()
+        initial = {}
+        source_credit_id = request.GET.get('source_credit')
+        if source_credit_id:
+            try:
+                from .models import BudgetCredit
+                sc = BudgetCredit.objects.get(pk=source_credit_id)
+                initial['source_credit'] = sc.pk
+                initial['fiscal_year'] = sc.fiscal_year.pk if sc.fiscal_year else None
+                initial['programa'] = sc.programa.pk if sc.programa else None
+                
+                # Pre-completar los campos de destino con los del origen
+                initial['target_ff'] = sc.ff.pk if sc.ff else None
+                initial['target_subprog'] = sc.subprog.pk if sc.subprog else None
+                initial['target_inc'] = sc.inc.pk if sc.inc else None
+                initial['target_ppp_inc'] = sc.ppp_inc.pk if sc.ppp_inc else None
+                initial['target_pp_inc'] = sc.pp_inc.pk if sc.pp_inc else None
+                initial['target_pre_inc'] = sc.pre_inc.pk if sc.pre_inc else None
+                initial['target_incisos_agrupado'] = sc.incisos_agrupado.pk if sc.incisos_agrupado else None
+            except Exception:
+                pass
+        form = BudgetCompensacionForm(initial=initial)
     return render(request, 'budget/form_base.html', {'form': form, 'title': 'Solicitar Compensación de Partidas'})
 
 def compensacion_approve(request, pk):

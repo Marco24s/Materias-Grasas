@@ -53,7 +53,7 @@ def allocate_credit(credit, unit, amount, notes=""):
 
 
 @transaction.atomic
-def register_commitment(allocation_id, reference_code, amount, commitment_date, user, external_id=None):
+def register_commitment(allocation_id, reference_code, amount, commitment_date, user, external_id=None, tipo_gasto=None, afecta_pg117=False, numero_obra=None, subcuenta=None):
     """
     Registra un compromiso con control de concurrencia e idempotencia extrema.
     Orden de operaciones:
@@ -85,6 +85,10 @@ def register_commitment(allocation_id, reference_code, amount, commitment_date, 
                 allocation=allocation, 
                 reference_code=reference_code,
                 external_id=external_id,
+                tipo_gasto=tipo_gasto,
+                afecta_pg117=afecta_pg117,
+                numero_obra=numero_obra,
+                subcuenta=subcuenta,
                 commitment_amount=amount, 
                 commitment_date=commitment_date, 
                 user=user
@@ -299,6 +303,7 @@ def execute_compensacion(compensacion_id, user):
     # 2. Buscar o crear destino
     target, created = BudgetCredit.objects.get_or_create(
         fiscal_year=comp.fiscal_year,
+        credit_type=source.credit_type,
         ff=comp.target_ff,
         programa=comp.programa,
         subprog=comp.target_subprog,
@@ -307,7 +312,6 @@ def execute_compensacion(compensacion_id, user):
         pp_inc=comp.target_pp_inc,
         pre_inc=comp.target_pre_inc,
         incisos_agrupado=comp.target_incisos_agrupado,
-        defaults={'credit_type': source.credit_type}
     )
     
     # 3. Sumar a destino

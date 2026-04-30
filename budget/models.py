@@ -33,6 +33,7 @@ class BudgetSubprog(models.Model):
 class BudgetProg(models.Model):
     code = models.CharField(max_length=50, unique=True, verbose_name="Código PROG")
     name = models.CharField(max_length=255, verbose_name="Nombre Programa")
+    admin_code = models.CharField(max_length=3, blank=True, null=True, verbose_name="Administrador de Programa (3 chars)")
     class Meta: verbose_name = "Programa"; verbose_name_plural = "Programas"
     def __str__(self): return f"{self.code} - {self.name}"
 
@@ -132,7 +133,7 @@ class BudgetAllocation(models.Model):
         return self.allocated_amount - self.spent_amount
 
     def __str__(self):
-        return f"Ejecución {self.reference_code} - {self.allocation.unit.name}"
+        return f"Distribución {self.unit.name} - {self.credit}"
 
 class BudgetCompensacion(models.Model):
     STATUS_CHOICES = [
@@ -150,9 +151,9 @@ class BudgetCompensacion(models.Model):
     target_ff = models.ForeignKey(BudgetFF, on_delete=models.PROTECT, verbose_name="FF Destino")
     target_subprog = models.ForeignKey(BudgetSubprog, on_delete=models.PROTECT, verbose_name="Subprog Destino")
     target_inc = models.ForeignKey(BudgetInc, on_delete=models.PROTECT, verbose_name="Inciso Destino")
-    target_ppp_inc = models.ForeignKey(BudgetPPPInc, on_delete=models.PROTECT, verbose_name="PPAL Destino")
-    target_pp_inc = models.ForeignKey(BudgetPPInc, on_delete=models.PROTECT, verbose_name="Parcial Destino")
-    target_pre_inc = models.ForeignKey(BudgetPreInc, on_delete=models.PROTECT, verbose_name="SubParcial Destino")
+    target_ppp_inc = models.ForeignKey(BudgetPPPInc, on_delete=models.PROTECT, null=True, blank=True, verbose_name="PPAL Destino")
+    target_pp_inc = models.ForeignKey(BudgetPPInc, on_delete=models.PROTECT, null=True, blank=True, verbose_name="Parcial Destino")
+    target_pre_inc = models.ForeignKey(BudgetPreInc, on_delete=models.PROTECT, null=True, blank=True, verbose_name="SubParcial Destino")
     target_incisos_agrupado = models.ForeignKey(BudgetIncisosAgrupado, on_delete=models.PROTECT, verbose_name="Moneda Destino")
     
     q1_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto T1")
@@ -181,9 +182,26 @@ class BudgetCompensacion(models.Model):
         return self.q1_amount + self.q2_amount + self.q3_amount + self.q4_amount
 
 class BudgetExecution(models.Model):
+    TIPO_GASTO_CHOICES = [
+        ('2', 'Gastos de Comida (JEMI)'),
+        ('3', 'Mora en el Pago'),
+        ('4', 'Mantenimiento Correctivo'),
+        ('6', 'Viáticos Operativos'),
+        ('7', 'Pasajes'),
+        ('8', 'Viáticos con cargo'),
+        ('9', 'I.C.D.'),
+    ]
+
     allocation = models.ForeignKey(BudgetAllocation, on_delete=models.PROTECT, related_name="executions", verbose_name="Distribución / Techo")
     reference_code = models.CharField(max_length=100, verbose_name="Nro. Expediente / Referencia")
     external_id = models.CharField(max_length=100, unique=True, null=True, blank=True, verbose_name="ID de Control Único (Opcional)", help_text="Código para evitar registros duplicados (Ej: Nro. Factura, ID de sistema externo, etc).")
+    
+    # Nuevos campos para Rendición
+    tipo_gasto = models.CharField(max_length=1, choices=TIPO_GASTO_CHOICES, blank=True, null=True, verbose_name="Tipo de Gasto (TG)")
+    afecta_pg117 = models.BooleanField(default=False, verbose_name="Afecta PG 117")
+    numero_obra = models.CharField(max_length=5, blank=True, null=True, verbose_name="Número de Obra")
+    subcuenta = models.CharField(max_length=2, blank=True, null=True, verbose_name="Subcuenta (SC)", default='51')
+    
     commitment_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto Comprometido")
     commitment_date = models.DateField(verbose_name="Fecha de Compromiso")
     accrued_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto Devengado")
@@ -196,6 +214,58 @@ class BudgetExecution(models.Model):
         verbose_name = "Ejecución Presupuestaria"
         verbose_name_plural = "Ejecuciones Presupuestarias"
     def __str__(self): return self.reference_code
+
+    def get_subparcial_calculado(self):
+        """Calcula los 5 dígitos del Subparcial según FF e Inciso"""
+        if not self.allocation or not self.allocation.credit:
+            return "00000"
+        
+        credit = self.allocation.credit
+        ff_code = credit.ff.code if credit.ff else ""
+        inc_code = credit.inc.code if credit.inc else ""
+        
+        # Nomenclador base (2 dígitos). Usamos pre_inc si existe, o '00'
+        nom_base = "00"
+        if credit.pre_inc and credit.pre_inc.code:
+            nom_base = credit.pre_inc.code[:2].zfill(2)
+
+        if ff_code in ['13', '99'] and inc_code == '4':
+            return "99999"
+        elif inc_code == '4':
+            # Asumimos que FF es 11 o cualquier otra que aplique número de obra
+            return str(self.numero_obra).zfill(5) if self.numero_obra else "00000"
+        else:
+            # Incisos 1, 2, 3, 5 (FF 11, 13, 99)
+            tg = self.tipo_gasto if self.tipo_gasto else "0"
+            afecta = "17" if self.afecta_pg117 else "00"
+            return f"{nom_base}{tg}{afecta}"
+
+    def get_imputacion_variable(self):
+        """Genera la cadena de la Parte Variable de la imputación: UUUUUU.I.P.p.SSSSS.M.OOO.CC"""
+        if not self.allocation or not self.allocation.credit:
+            return ""
+        
+        unit = self.allocation.unit
+        credit = self.allocation.credit
+        
+        # UUUUUU
+        uc = unit.component_code.zfill(6) if unit.component_code else "000000"
+        # I
+        inc = credit.inc.code[:1] if credit.inc else "0"
+        # P
+        ppal = credit.ppp_inc.code[:1] if credit.ppp_inc else "0"
+        # p
+        parcial = credit.pp_inc.code[:1] if credit.pp_inc else "0"
+        # SSSSS
+        subparcial = self.get_subparcial_calculado()
+        # M
+        moneda = credit.incisos_agrupado.code[:1] if credit.incisos_agrupado else "1"
+        # OOO
+        ot = unit.ot_code.zfill(3) if unit.ot_code else "000"
+        # CC
+        sc = self.subcuenta.zfill(2) if self.subcuenta else "51"
+        
+        return f"{uc}.{inc}.{ppal}.{parcial}.{subparcial}.{moneda}.{ot}.{sc}"
 
 
 class BudgetCreditTypeLog(models.Model):

@@ -15,6 +15,8 @@ class CustomUser(AbstractUser):
 
 class Unit(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="Nombre de la Unidad")
+    component_code = models.CharField(max_length=6, blank=True, null=True, verbose_name="Código Unidad Componente (6 chars)", help_text="Ej: UUUUUU")
+    ot_code = models.CharField(max_length=3, blank=True, null=True, verbose_name="Organismo Técnico (OT)", help_text="Ej: 001")
     description = models.TextField(blank=True, null=True, verbose_name="Descripción")
 
     class Meta:

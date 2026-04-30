@@ -140,25 +140,65 @@ class BudgetExecutionCommitmentForm(forms.ModelForm):
     )
     class Meta:
         model = BudgetExecution
-        fields = ['allocation', 'use_total_amount', 'reference_code', 'external_id', 'commitment_amount', 'commitment_date']
+        fields = [
+            'allocation', 'use_total_amount', 'reference_code', 'external_id', 
+            'tipo_gasto', 'afecta_pg117', 'numero_obra', 'subcuenta',
+            'commitment_amount', 'commitment_date'
+        ]
         labels = {
             'allocation': 'Distribución / Techo Presupuestario',
             'reference_code': 'Número de Expediente / Comprobante',
             'external_id': 'ID de Control Único (Opcional)',
             'commitment_amount': 'Monto a Comprometer',
-            'commitment_date': 'Fecha del Compromiso'
+            'commitment_date': 'Fecha del Compromiso',
+            'tipo_gasto': 'Tipo de Gasto (TG)',
+            'afecta_pg117': 'Afecta PG 117',
+            'numero_obra': 'Número de Obra',
+            'subcuenta': 'Subcuenta (SC)',
         }
         help_texts = {
             'allocation': 'Seleccione la distribución de crédito contra la cual se imputará el gasto.',
             'reference_code': 'Ejemplo: Exp. 123/2026 o Nota Log. 45/26',
             'commitment_amount': 'Ingrese el monto bruto que se reserva para esta operación.',
-            'external_id': 'Código único para prevenir registros duplicados (Ej: Nro. Factura o ID de sistema externo).',
+            'external_id': 'Código único para prevenir registros duplicados.',
+            'tipo_gasto': 'Requerido para Incisos 1, 2, 3 y 5.',
+            'numero_obra': 'Requerido para Inciso 4 (5 dígitos).',
+            'subcuenta': 'Se autocompleta con 51 o 99 según FF, pero es editable.',
         }
         widgets = {
             'commitment_date': forms.DateInput(attrs={'type': 'date'}),
             'commitment_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
+            'numero_obra': forms.TextInput(attrs={'maxlength': '5'}),
         }
         localized_fields = ('commitment_amount',)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        allocation = cleaned_data.get('allocation')
+        tipo_gasto = cleaned_data.get('tipo_gasto')
+        numero_obra = cleaned_data.get('numero_obra')
+
+        if allocation and allocation.credit:
+            credit = allocation.credit
+            inc_code = credit.inc.code if credit.inc else ""
+            ff_code = credit.ff.code if credit.ff else ""
+
+            # Validaciones Inciso 4
+            if inc_code == '4':
+                if ff_code not in ['13', '99']:
+                    if not numero_obra:
+                        self.add_error('numero_obra', 'Para el Inciso 4 (sin FF 13/99), el Número de Obra es obligatorio.')
+                    elif len(str(numero_obra)) != 5:
+                        self.add_error('numero_obra', 'El Número de Obra debe tener exactamente 5 dígitos.')
+                # Si es FF 13 o 99, será 99999 automáticamente, no necesita error de falta de numero
+            else:
+                # Validaciones Incisos 1, 2, 3, 5
+                if not tipo_gasto:
+                    self.add_error('tipo_gasto', f'Para el Inciso {inc_code}, el Tipo de Gasto es obligatorio.')
+                if numero_obra:
+                    self.add_error('numero_obra', f'El Número de Obra solo aplica al Inciso 4. Deje este campo en blanco.')
+
+        return cleaned_data
 
 class BudgetExecutionAccrualForm(forms.ModelForm):
     class Meta:
