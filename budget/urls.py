@@ -33,6 +33,7 @@ urlpatterns = [
     path('executions/<int:pk>/detail/', views.execution_detail, name='execution_detail'),
     path('executions/<int:pk>/release-surplus/', views.execution_release_surplus, name='execution_release_surplus'),
     path('executions/<int:pk>/delete/', views.execution_delete, name='execution_delete'),
+    path('executions/export/rendicion/', views.export_rendicion_csv, name='export_rendicion_csv'),
     
     # Configuración / Nomencladores
     path('config/', views.nomenclature_dashboard, name='nomenclature_dashboard'),

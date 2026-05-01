@@ -131,9 +131,28 @@
                 <div class="text-muted">Imputación Presupuestaria:</div>
                 <div class="fw-bold">{{ execution.allocation.credit }}</div>
             </div>
-            <div class="small mb-0">
+            <div class="small mb-3">
                 <div class="text-muted">Fuente Financiamiento:</div>
                 <div class="fw-bold">{{ execution.allocation.credit.ff|default:"N/A" }}</div>
+            </div>
+            <div class="small mb-3">
+                <div class="text-muted">Tipo de Gasto (TG) / Obra:</div>
+                <div class="fw-bold">
+                    {% if execution.allocation.credit.inc.code == '4' %}
+                        Obra: {{ execution.numero_obra|default:"99999" }}
+                    {% else %}
+                        TG: {{ execution.get_tipo_gasto_display|default:"Sin especificar" }}
+                        {% if execution.afecta_pg117 %} <span class="badge bg-info ms-1">PG 117</span> {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="small mb-3">
+                <div class="text-muted">Subcuenta (SC):</div>
+                <div class="fw-bold">{{ execution.subcuenta|default:"51" }}</div>
+            </div>
+            <div class="mt-3 p-2 bg-light border rounded text-center">
+                <div class="text-muted x-small text-uppercase fw-bold" style="font-size: 0.65rem;">Imputación Variable (28 Chars)</div>
+                <div class="fw-bold text-primary" style="letter-spacing: 1px; font-family: monospace;">{{ execution.get_imputacion_variable }}</div>
             </div>
             <hr>
             <div class="small text-muted">

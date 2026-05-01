@@ -9,6 +9,8 @@ from .models import (
     BudgetInc, BudgetCredit, BudgetAllocation, BudgetExecution,
     BudgetClassification, BudgetCreditType, BudgetCreditTypeLog, BudgetCompensacion, InsufficientFundsError
 )
+import csv
+from django.http import HttpResponse
 from .forms import (
     BudgetFiscalYearForm, BudgetCreditForm, BudgetAllocationForm,
     BudgetExecutionCommitmentForm, BudgetExecutionAccrualForm, 
@@ -516,7 +518,11 @@ def execution_step_commitment(request):
                     external_id=form.cleaned_data.get('external_id'),
                     amount=form.cleaned_data['commitment_amount'], 
                     commitment_date=form.cleaned_data['commitment_date'], 
-                    user=request.user
+                    user=request.user,
+                    tipo_gasto=form.cleaned_data.get('tipo_gasto'),
+                    afecta_pg117=form.cleaned_data.get('afecta_pg117', False),
+                    numero_obra=form.cleaned_data.get('numero_obra'),
+                    subcuenta=form.cleaned_data.get('subcuenta')
                 )
                 messages.success(request, "Compromiso registrado exitosamente.")
                 return redirect('budget:execution_list')
@@ -538,13 +544,22 @@ def execution_step_commitment(request):
     # Preparar el mapeo de montos para el JS
     allocations = form.fields['allocation'].queryset
     amounts_map = {a.id: float(a.available_amount) for a in allocations}
+    
+    # Preparar metadata para lógica condicional de la UI (FF e Inciso)
+    allocations_metadata = {
+        a.id: {
+            'ff': a.credit.ff.code if a.credit.ff else "",
+            'inciso': a.credit.inc.code if a.credit.inc else ""
+        } for a in allocations.select_related('credit__ff', 'credit__inc')
+    }
             
     help_text = "Para registrar un compromiso, primero debe existir una Distribución de Crédito (Techo) asignada a la unidad. Si no ve opciones en el desplegable, contacte a Logística para la distribución de fondos."
     return render(request, 'budget/execution_commitment_form.html', {
         'form': form, 
         'title': 'Paso 1: Registro de Compromiso',
         'help_text': help_text,
-        'amounts_map': json.dumps(amounts_map)
+        'amounts_map': json.dumps(amounts_map),
+        'allocations_metadata': json.dumps(allocations_metadata)
     })
 
 def execution_step_accrual(request, pk):
@@ -618,6 +633,55 @@ def execution_delete(request, pk):
         'title': f"Borrar Ejecución: {execution.reference_code}",
         'cancel_url': 'budget:execution_list'
     })
+
+def export_rendicion_csv(request):
+    """Exporta los gastos en el formato requerido para la Rendición."""
+    if not is_admin(request.user):
+        return HttpResponse("Acceso denegado", status=403)
+    
+    # Filtrar por ejercicio actual si se desea, o todos
+    fiscal_year = BudgetFiscalYear.objects.filter(status='OPEN').first()
+    executions = BudgetExecution.objects.all().select_related(
+        'allocation__unit', 'allocation__credit__ff', 'allocation__credit__programa',
+        'allocation__credit__subprog', 'allocation__credit__inc', 
+        'allocation__credit__ppp_inc', 'allocation__credit__pp_inc',
+        'allocation__credit__pre_inc', 'allocation__credit__incisos_agrupado'
+    ).order_by('-created_at')
+    
+    if fiscal_year:
+        executions = executions.filter(allocation__credit__fiscal_year=fiscal_year)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="rendicion_presupuestaria.csv"'
+    
+    # Escribir con codificación latin-1 para compatibilidad con Excel en español si es necesario, 
+    # o usar UTF-8 con BOM. Usaremos UTF-8 con BOM para máxima compatibilidad.
+    response.write('\ufeff'.encode('utf8'))
+    writer = csv.writer(response, delimiter=';')
+    
+    # Encabezados
+    writer.writerow([
+        'Expediente/Referencia', 'Unidad', 'Fecha Compromiso', 
+        'Imputación Fija (Programa/FF)', 'Imputación Variable (28 chars)',
+        'Monto Comprometido', 'Monto Devengado', 'Monto Pagado'
+    ])
+    
+    for e in executions:
+        # Formatear montos con coma
+        def fmt(val): return str(val).replace('.', ',')
+        
+        writer.writerow([
+            e.reference_code,
+            e.allocation.unit.name,
+            e.commitment_date.strftime('%d/%m/%Y'),
+            f"{e.allocation.credit.programa.code} / FF {e.allocation.credit.ff.code}",
+            e.get_imputacion_variable(),
+            fmt(e.commitment_amount),
+            fmt(e.accrued_amount),
+            fmt(e.paid_amount)
+        ])
+        
+    return response
 
 # --- Gestión de Nomencladores (Configuración) ---
 
