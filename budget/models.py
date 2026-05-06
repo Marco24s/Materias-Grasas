@@ -98,10 +98,12 @@ class BudgetCredit(models.Model):
     q4_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Registro", null=True)
+    
     class Meta:
         verbose_name = "Crédito Presupuestario"
         verbose_name_plural = "Créditos Presupuestarios"
-        unique_together = ('fiscal_year', 'credit_type', 'ff', 'programa', 'subprog', 'inc', 'ppp_inc', 'pp_inc', 'pre_inc', 'incisos_agrupado')
+        ordering = ['-created_at']
 
     def __str__(self):
         parts = []
@@ -121,13 +123,21 @@ class BudgetCredit(models.Model):
 class BudgetAllocation(models.Model):
     credit = models.ForeignKey(BudgetCredit, on_delete=models.PROTECT, related_name="allocations", verbose_name="Crédito Origen")
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="budget_allocations", verbose_name="Unidad Destino")
-    allocated_amount = models.DecimalField(max_digits=18, decimal_places=2, verbose_name="Monto Asignado (Techo)")
+    q1_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto T1")
+    q2_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto T2")
+    q3_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto T3")
+    q4_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto T4")
+    allocated_amount = models.DecimalField(max_digits=18, decimal_places=2, verbose_name="Monto Asignado (Techo Total)")
     spent_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto Comprometido (Acumulado)")
     notes = models.TextField(blank=True, null=True, verbose_name="Observaciones")
     class Meta: 
         verbose_name = "Distribución de Crédito"
         verbose_name_plural = "Distribuciones de Crédito"
     
+    def save(self, *args, **kwargs):
+        self.allocated_amount = self.q1_amount + self.q2_amount + self.q3_amount + self.q4_amount
+        super().save(*args, **kwargs)
+
     @property
     def available_amount(self):
         return self.allocated_amount - self.spent_amount

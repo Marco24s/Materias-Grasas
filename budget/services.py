@@ -37,18 +37,30 @@ def create_credit(fiscal_year, ff, programa, subprog, inc, ppp_inc, pp_inc, pre_
 
 
 @transaction.atomic
-def allocate_credit(credit, unit, amount, notes=""):
+def allocate_credit(credit, unit, q1=0, q2=0, q3=0, q4=0, notes=""):
+    amount = q1 + q2 + q3 + q4
     if amount <= 0:
-        raise ValidationError("El monto a distribuir debe ser positivo.")
+        raise ValidationError("El monto total a distribuir debe ser mayor a cero.")
 
-    allocated_total = credit.allocations.aggregate(Sum('allocated_amount'))['allocated_amount__sum'] or 0
-    if allocated_total + amount > credit.total_amount:
-        raise ValidationError(
-            f"La distribución supera el monto total del crédito disponible (${credit.total_amount}). "
-        )
+    # Validaciones contra el crédito de origen por cada trimestre
+    allocated_q1 = credit.allocations.aggregate(Sum('q1_amount'))['q1_amount__sum'] or 0
+    allocated_q2 = credit.allocations.aggregate(Sum('q2_amount'))['q2_amount__sum'] or 0
+    allocated_q3 = credit.allocations.aggregate(Sum('q3_amount'))['q3_amount__sum'] or 0
+    allocated_q4 = credit.allocations.aggregate(Sum('q4_amount'))['q4_amount__sum'] or 0
+
+    if allocated_q1 + q1 > credit.q1_amount:
+        raise ValidationError(f"La distribución en T1 (${q1}) supera el disponible del crédito (${credit.q1_amount - allocated_q1}).")
+    if allocated_q2 + q2 > credit.q2_amount:
+        raise ValidationError(f"La distribución en T2 (${q2}) supera el disponible del crédito (${credit.q2_amount - allocated_q2}).")
+    if allocated_q3 + q3 > credit.q3_amount:
+        raise ValidationError(f"La distribución en T3 (${q3}) supera el disponible del crédito (${credit.q3_amount - allocated_q3}).")
+    if allocated_q4 + q4 > credit.q4_amount:
+        raise ValidationError(f"La distribución en T4 (${q4}) supera el disponible del crédito (${credit.q4_amount - allocated_q4}).")
     
     return BudgetAllocation.objects.create(
-        credit=credit, unit=unit, allocated_amount=amount, notes=notes
+        credit=credit, unit=unit, 
+        q1_amount=q1, q2_amount=q2, q3_amount=q3, q4_amount=q4,
+        notes=notes
     )
 
 
@@ -206,17 +218,36 @@ def get_unit_execution_report(fiscal_year):
     report = []
     units = Unit.objects.filter(budget_allocations__credit__fiscal_year=fiscal_year).distinct()
     for unit in units:
-        allocations = BudgetAllocation.objects.filter(unit=unit, credit__fiscal_year=fiscal_year)
+        allocations = BudgetAllocation.objects.filter(unit=unit, credit__fiscal_year=fiscal_year).select_related('credit__ff', 'credit__programa', 'credit__subprog', 'credit__inc', 'credit__ppp_inc', 'credit__pp_inc', 'credit__pre_inc')
         total_allocated = allocations.aggregate(Sum('allocated_amount'))['allocated_amount__sum'] or 0
         executions = BudgetExecution.objects.filter(allocation__in=allocations)
         tc = executions.aggregate(Sum('commitment_amount'))['commitment_amount__sum'] or 0
         ta = executions.aggregate(Sum('accrued_amount'))['accrued_amount__sum'] or 0
         tp = executions.aggregate(Sum('paid_amount'))['paid_amount__sum'] or 0
+        
+        # Detalle de créditos
+        credit_details = []
+        for alloc in allocations:
+            credit_details.append({
+                'nomenclature': str(alloc.credit),
+                'total': alloc.allocated_amount,
+                'spent': alloc.spent_amount,
+                'available': alloc.allocated_amount - alloc.spent_amount,
+                'ff': alloc.credit.ff.code if alloc.credit.ff else "--",
+                'notes': alloc.notes
+            })
+
         report.append({
-            'unit': unit, 'allocated': total_allocated, 'commitment': tc,
-            'accrued': ta, 'paid': tp, 'available': total_allocated - tc,
-            'residuos': tc - ta, 'deuda_flotante': ta - tp,
-            'percent_executed': (tc / total_allocated * 100) if total_allocated > 0 else 0
+            'unit': unit, 
+            'allocated': total_allocated, 
+            'commitment': tc,
+            'accrued': ta, 
+            'paid': tp, 
+            'available': total_allocated - tc,
+            'residuos': tc - ta, 
+            'deuda_flotante': ta - tp,
+            'percent_executed': (tc / total_allocated * 100) if total_allocated > 0 else 0,
+            'allocations': credit_details
         })
     return report
 
@@ -300,8 +331,8 @@ def execute_compensacion(compensacion_id, user):
     source.q4_amount -= comp.q4_amount
     source.save()
     
-    # 2. Buscar o crear destino
-    target, created = BudgetCredit.objects.get_or_create(
+    # 2. Buscar o crear destino (tomamos el más reciente si hay varios)
+    target = BudgetCredit.objects.filter(
         fiscal_year=comp.fiscal_year,
         credit_type=source.credit_type,
         ff=comp.target_ff,
@@ -312,7 +343,21 @@ def execute_compensacion(compensacion_id, user):
         pp_inc=comp.target_pp_inc,
         pre_inc=comp.target_pre_inc,
         incisos_agrupado=comp.target_incisos_agrupado,
-    )
+    ).first()
+    
+    if not target:
+        target = BudgetCredit.objects.create(
+            fiscal_year=comp.fiscal_year,
+            credit_type=source.credit_type,
+            ff=comp.target_ff,
+            programa=comp.programa,
+            subprog=comp.target_subprog,
+            inc=comp.target_inc,
+            ppp_inc=comp.target_ppp_inc,
+            pp_inc=comp.target_pp_inc,
+            pre_inc=comp.target_pre_inc,
+            incisos_agrupado=comp.target_incisos_agrupado,
+        )
     
     # 3. Sumar a destino
     target.q1_amount += comp.q1_amount

@@ -105,11 +105,24 @@ class BudgetAllocationForm(forms.ModelForm):
     
     class Meta:
         model = BudgetAllocation
-        fields = ['credit', 'unit', 'allocated_amount', 'notes']
-        widgets = {
-            'allocated_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
+        fields = [
+            'credit', 'unit', 
+            'q1_amount', 'q2_amount', 'q3_amount', 'q4_amount',
+            'notes'
+        ]
+        labels = {
+            'q1_amount': 'Monto 1er Trimestre (T1)',
+            'q2_amount': 'Monto 2do Trimestre (T2)',
+            'q3_amount': 'Monto 3er Trimestre (T3)',
+            'q4_amount': 'Monto 4to Trimestre (T4)',
         }
-        localized_fields = ('allocated_amount',)
+        widgets = {
+            'q1_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
+            'q2_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
+            'q3_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
+            'q4_amount': forms.TextInput(attrs={'class': 'form-control currency-input', 'placeholder': '0,00'}),
+        }
+        localized_fields = ('q1_amount', 'q2_amount', 'q3_amount', 'q4_amount')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

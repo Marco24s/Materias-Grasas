@@ -19,11 +19,13 @@ urlpatterns = [
     path('credits/<int:pk>/unassign-type/', views.credit_unassign_type, name='credit_unassign_type'),
     path('credits/<int:pk>/detail/', views.credit_detail, name='credit_detail'),
     path('credits/<int:pk>/delete/', views.credit_delete, name='credit_delete'),
+    path('credits/bulk-delete/', views.credit_bulk_delete, name='credit_bulk_delete'),
     
     # Distribución (UU.CC.)
     path('allocations/', views.allocation_list, name='allocation_list'),
     path('allocations/create/', views.allocation_create, name='allocation_create'),
     path('allocations/<int:pk>/delete/', views.allocation_delete, name='allocation_delete'),
+    path('allocations/bulk-delete/', views.allocation_bulk_delete, name='allocation_bulk_delete'),
     
     # Ejecución (Flujo Secuencial)
     path('executions/', views.execution_list, name='execution_list'),

@@ -23,6 +23,30 @@
 </div>
 
 {% if fiscal_year %}
+<style>
+    .card-quarter:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
+        cursor: pointer;
+    }
+    .card-quarter {
+        transition: all 0.3s ease;
+        border-radius: 8px;
+    }
+    .modal-body-scroll {
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+    .transition-icon {
+        transition: transform 0.3s ease;
+    }
+    .unit-row[aria-expanded="true"] .transition-icon {
+        transform: rotate(90deg);
+    }
+    .unit-row:hover {
+        background-color: rgba(25, 135, 84, 0.02) !important;
+    }
+</style>
 <div class="row g-4 mb-4">
     <!-- Columna Izquierda: AA.PP. -->
     <div class="col-lg-8">
@@ -194,8 +218,19 @@
                                 <span class="fw-bold text-info">${{ stats.q1_refuerzo|localize }}</span>
                             </div>
                         </div>
-                        <div class="pt-2 border-top mt-auto">
-                            <div class="fw-bold text-primary" style="font-size: 1rem;">Total: ${{ stats.q1_total|localize }}</div>
+                        <div class="pt-2 border-top mt-auto card-quarter" data-bs-toggle="modal" data-bs-target="#modalQ1">
+                            <div class="fw-bold text-primary mb-1 d-flex justify-content-between align-items-center" style="font-size: 1rem;">
+                                <span>Total: ${{ stats.q1_total|localize }}</span>
+                                <i class="fa-solid fa-magnifying-glass-chart fa-xs opacity-50"></i>
+                            </div>
+                            <div class="d-flex justify-content-between small">
+                                <span class="text-muted">Distribuido:</span>
+                                <span class="fw-bold text-success">${{ stats.q1_alloc|localize }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between small">
+                                <span class="text-muted">Disponible:</span>
+                                <span class="fw-bold {% if stats.q1_available > 0 %}text-secondary{% else %}text-danger{% endif %}">${{ stats.q1_available|localize }}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -212,8 +247,19 @@
                                 <span class="fw-bold text-info">${{ stats.q2_refuerzo|localize }}</span>
                             </div>
                         </div>
-                        <div class="pt-2 border-top mt-auto">
-                            <div class="fw-bold text-primary" style="font-size: 1rem;">Total: ${{ stats.q2_total|localize }}</div>
+                        <div class="pt-2 border-top mt-auto card-quarter" data-bs-toggle="modal" data-bs-target="#modalQ2">
+                            <div class="fw-bold text-primary mb-1 d-flex justify-content-between align-items-center" style="font-size: 1rem;">
+                                <span>Total: ${{ stats.q2_total|localize }}</span>
+                                <i class="fa-solid fa-magnifying-glass-chart fa-xs opacity-50"></i>
+                            </div>
+                            <div class="d-flex justify-content-between small">
+                                <span class="text-muted">Distribuido:</span>
+                                <span class="fw-bold text-success">${{ stats.q2_alloc|localize }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between small">
+                                <span class="text-muted">Disponible:</span>
+                                <span class="fw-bold {% if stats.q2_available > 0 %}text-secondary{% else %}text-danger{% endif %}">${{ stats.q2_available|localize }}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -230,8 +276,19 @@
                                 <span class="fw-bold text-info">${{ stats.q3_refuerzo|localize }}</span>
                             </div>
                         </div>
-                        <div class="pt-2 border-top mt-auto">
-                            <div class="fw-bold text-primary" style="font-size: 1rem;">Total: ${{ stats.q3_total|localize }}</div>
+                        <div class="pt-2 border-top mt-auto card-quarter" data-bs-toggle="modal" data-bs-target="#modalQ3">
+                            <div class="fw-bold text-primary mb-1 d-flex justify-content-between align-items-center" style="font-size: 1rem;">
+                                <span>Total: ${{ stats.q3_total|localize }}</span>
+                                <i class="fa-solid fa-magnifying-glass-chart fa-xs opacity-50"></i>
+                            </div>
+                            <div class="d-flex justify-content-between small">
+                                <span class="text-muted">Distribuido:</span>
+                                <span class="fw-bold text-success">${{ stats.q3_alloc|localize }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between small">
+                                <span class="text-muted">Disponible:</span>
+                                <span class="fw-bold {% if stats.q3_available > 0 %}text-secondary{% else %}text-danger{% endif %}">${{ stats.q3_available|localize }}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -248,8 +305,19 @@
                                 <span class="fw-bold text-info">${{ stats.q4_refuerzo|localize }}</span>
                             </div>
                         </div>
-                        <div class="pt-2 border-top mt-auto">
-                            <div class="fw-bold text-primary" style="font-size: 1rem;">Total: ${{ stats.q4_total|localize }}</div>
+                        <div class="pt-2 border-top mt-auto card-quarter" data-bs-toggle="modal" data-bs-target="#modalQ4">
+                            <div class="fw-bold text-primary mb-1 d-flex justify-content-between align-items-center" style="font-size: 1rem;">
+                                <span>Total: ${{ stats.q4_total|localize }}</span>
+                                <i class="fa-solid fa-magnifying-glass-chart fa-xs opacity-50"></i>
+                            </div>
+                            <div class="d-flex justify-content-between small">
+                                <span class="text-muted">Distribuido:</span>
+                                <span class="fw-bold text-success">${{ stats.q4_alloc|localize }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between small">
+                                <span class="text-muted">Disponible:</span>
+                                <span class="fw-bold {% if stats.q4_available > 0 %}text-secondary{% else %}text-danger{% endif %}">${{ stats.q4_available|localize }}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -345,8 +413,11 @@
                     </thead>
                     <tbody>
                         {% for row in unit_report %}
-                        <tr>
-                            <td><strong>{{ row.unit.name }}</strong></td>
+                        <tr data-bs-toggle="collapse" data-bs-target="#unit-{{ row.unit.id }}" style="cursor: pointer;" class="unit-row">
+                            <td>
+                                <i class="fa-solid fa-chevron-right me-2 text-muted transition-icon"></i>
+                                <strong>{{ row.unit.name }}</strong>
+                            </td>
                             <td class="text-end">${{ row.allocated|floatformat:2 }}</td>
                             <td class="text-end fw-bold">${{ row.commitment|floatformat:2 }}</td>
                             <td class="text-end text-info">${{ row.accrued|floatformat:2 }}</td>
@@ -362,6 +433,57 @@
                             <td class="text-end small">
                                 <div title="Residuos Pasivos (Comp. - Dev.)">R.P: ${{ row.residuos|floatformat:2 }}</div>
                                 <div class="text-muted" title="Deuda Flotante (Dev. - Pag.)">D.F: ${{ row.deuda_flotante|floatformat:2 }}</div>
+                            </td>
+                        </tr>
+                        <tr class="collapse" id="unit-{{ row.unit.id }}">
+                            <td colspan="7" class="p-0 border-0">
+                                <div class="px-4 py-3 bg-light-subtle border-start border-4 border-success m-2 rounded-3 shadow-sm">
+                                    <h6 class="fw-bold small text-uppercase text-success mb-3">
+                                        <i class="fa-solid fa-sitemap me-2"></i>Desglose de Créditos Asignados a {{ row.unit.name }}
+                                    </h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-borderless mb-0 dashboard-breakdown-table">
+                                            <thead>
+                                                <tr class="text-muted small">
+                                                    <th style="width: 30px;"></th>
+                                                    <th>Nomenclatura (FF-PROG-SUBP-INC-PP-PA-PC-MON)</th>
+                                                    <th class="text-end">Monto Asignado</th>
+                                                    <th class="text-end">Gastado</th>
+                                                    <th class="text-end">Disponible</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for alloc in row.allocations %}
+                                                <tr class="border-bottom border-light allocation-selectable-row" data-available="{{ alloc.available|unlocalize }}">
+                                                    <td class="py-2">
+                                                        <input type="checkbox" class="form-check-input allocation-checkbox">
+                                                    </td>
+                                                    <td class="small py-2">
+                                                        <div class="fw-semibold">
+                                                            <span class="badge bg-secondary-subtle text-secondary me-2">{{ alloc.ff }}</span>
+                                                            {{ alloc.nomenclature }}
+                                                        </div>
+                                                        {% if alloc.notes %}
+                                                        <div class="text-muted mt-1 italic" style="font-size: 0.75rem;">
+                                                            <i class="fa-solid fa-comment-dots me-1 opacity-50"></i>{{ alloc.notes }}
+                                                        </div>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td class="text-end py-2">${{ alloc.total|floatformat:2 }}</td>
+                                                    <td class="text-end py-2 text-danger">-${{ alloc.spent|floatformat:2 }}</td>
+                                                    <td class="text-end py-2 fw-bold text-success">${{ alloc.available|floatformat:2 }}</td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr class="bg-success bg-opacity-10 d-none selection-summary-row">
+                                                    <td colspan="4" class="text-end py-2 small fw-bold">SUMA SELECCIONADA:</td>
+                                                    <td class="text-end py-2 fw-bold text-success selection-total-cell" style="font-size: 1rem;">$0,00</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -384,4 +506,79 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Modales de Detalle Trimestral -->
+{% for q_num in "1234" %}
+<div class="modal fade" id="modalQ{{ q_num }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fa-solid fa-list-check me-2"></i>
+                    Detalle Presupuestario - {{ q_num }}er Trimestre
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body modal-body-scroll p-4">
+                {% if q_num == "1" %}{{ stats.q1_tooltip|safe }}
+                {% elif q_num == "2" %}{{ stats.q2_tooltip|safe }}
+                {% elif q_num == "3" %}{{ stats.q3_tooltip|safe }}
+                {% elif q_num == "4" %}{{ stats.q4_tooltip|safe }}
+                {% endif %}
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary px-4 rounded-pill" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const formatCurrency = (value) => {
+        return new Intl.NumberFormat('es-AR', {
+            style: 'currency',
+            currency: 'ARS',
+            minimumFractionDigits: 2
+        }).format(value);
+    };
+
+    const updateSum = (table) => {
+        const checkboxes = table.querySelectorAll('.allocation-checkbox:checked');
+        const summaryRow = table.querySelector('.selection-summary-row');
+        const totalCell = table.querySelector('.selection-total-cell');
+        
+        let total = 0;
+        checkboxes.forEach(cb => {
+            const row = cb.closest('.allocation-selectable-row');
+            total += parseFloat(row.dataset.available || 0);
+            row.classList.add('bg-success', 'bg-opacity-10');
+        });
+
+        // Limpiar resaltado de las no seleccionadas
+        table.querySelectorAll('.allocation-checkbox:not(:checked)').forEach(cb => {
+            cb.closest('.allocation-selectable-row').classList.remove('bg-success', 'bg-opacity-10');
+        });
+
+        if (checkboxes.length > 0) {
+            summaryRow.classList.remove('d-none');
+            totalCell.textContent = formatCurrency(total);
+        } else {
+            summaryRow.classList.add('d-none');
+        }
+    };
+
+    // Delegación de eventos para las tablas de desglose (ya que están dentro de collapses)
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('allocation-checkbox')) {
+            const table = e.target.closest('.dashboard-breakdown-table');
+            updateSum(table);
+        }
+    });
+});
+</script>
 {% endblock %}

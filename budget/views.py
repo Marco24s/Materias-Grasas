@@ -2,7 +2,9 @@ from django import forms
 from django.shortcuts import render, redirect, get_object_or_404
 from decimal import Decimal
 from django.contrib import messages
-from django.db.models import Sum, F, OuterRef, ProtectedError
+from django.db import models
+from django.db.models import Sum, F, OuterRef, ProtectedError, Q
+from django.db.models.functions import Coalesce
 from .models import (
     BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetProg,
     BudgetPPPInc, BudgetPPInc, BudgetPreInc, BudgetIncisosAgrupado,
@@ -60,31 +62,87 @@ def dashboard(request):
             stats[f'{q}_asignacion'] = credits.filter(credit_type__code='ASIGNACION').aggregate(Sum(field))[f'{field}__sum'] or 0
             stats[f'{q}_refuerzo'] = credits.filter(credit_type__code='REFUERZO').aggregate(Sum(field))[f'{field}__sum'] or 0
 
-        # Cálculo de anchos para la barra de progreso trimestral (basado en compromisos)
-        total_q = stats['total_credit']
-        rem_c = stats['total_commitment']
-        
+        # Cálculo de anchos para la barra de progreso trimestral (basado en compromisos REALES por fecha)
         q1_t, q2_t, q3_t, q4_t = stats['q1_total'], stats['q2_total'], stats['q3_total'], stats['q4_total']
         
-        stats['q1_fill'] = (min(rem_c, q1_t) / q1_t * 100) if q1_t > 0 else 0
-        rem_c = max(0, rem_c - q1_t)
-        stats['q2_fill'] = (min(rem_c, q2_t) / q2_t * 100) if q2_t > 0 else 0
-        rem_c = max(0, rem_c - q2_t)
-        stats['q3_fill'] = (min(rem_c, q3_t) / q3_t * 100) if q3_t > 0 else 0
-        rem_c = max(0, rem_c - q3_t)
-        stats['q4_fill'] = (min(rem_c, q4_t) / q4_t * 100) if q4_t > 0 else 0
-        
-        # Cálculo de anchos para la barra de DISTRIBUCIÓN (Techos)
-        rem_a = stats['total_allocated']
-        stats['q1_alloc_fill'] = (min(rem_a, q1_t) / q1_t * 100) if q1_t > 0 else 0
-        rem_a = max(0, rem_a - q1_t)
-        stats['q2_alloc_fill'] = (min(rem_a, q2_t) / q2_t * 100) if q2_t > 0 else 0
-        rem_a = max(0, rem_a - q2_t)
-        stats['q3_alloc_fill'] = (min(rem_a, q3_t) / q3_t * 100) if q3_t > 0 else 0
-        rem_a = max(0, rem_a - q3_t)
-        stats['q4_alloc_fill'] = (min(rem_a, q4_t) / q4_t * 100) if q4_t > 0 else 0
+        # Agrupación de compromisos por trimestre real
+        q1_c = executions.filter(commitment_date__month__in=[1,2,3]).aggregate(Sum('commitment_amount'))['commitment_amount__sum'] or 0
+        q2_c = executions.filter(commitment_date__month__in=[4,5,6]).aggregate(Sum('commitment_amount'))['commitment_amount__sum'] or 0
+        q3_c = executions.filter(commitment_date__month__in=[7,8,9]).aggregate(Sum('commitment_amount'))['commitment_amount__sum'] or 0
+        q4_c = executions.filter(commitment_date__month__in=[10,11,12]).aggregate(Sum('commitment_amount'))['commitment_amount__sum'] or 0
 
-        # Ancho relativo de cada segmento (trimestre) respecto al total
+        stats['q1_fill'] = (q1_c / q1_t * 100) if q1_t > 0 else 0
+        stats['q2_fill'] = (q2_c / q2_t * 100) if q2_t > 0 else 0
+        stats['q3_fill'] = (q3_c / q3_t * 100) if q3_t > 0 else 0
+        stats['q4_fill'] = (q4_c / q4_t * 100) if q4_t > 0 else 0
+        
+        # Cálculo de anchos para la barra de DISTRIBUCIÓN (Techos REALES por trimestre)
+        stats['q1_alloc'] = allocations.aggregate(Sum('q1_amount'))['q1_amount__sum'] or 0
+        stats['q2_alloc'] = allocations.aggregate(Sum('q2_amount'))['q2_amount__sum'] or 0
+        stats['q3_alloc'] = allocations.aggregate(Sum('q3_amount'))['q3_amount__sum'] or 0
+        stats['q4_alloc'] = allocations.aggregate(Sum('q4_amount'))['q4_amount__sum'] or 0
+
+        # Saldos disponibles por distribuir en cada trimestre
+        stats['q1_available'] = stats['q1_total'] - stats['q1_alloc']
+        stats['q2_available'] = stats['q2_total'] - stats['q2_alloc']
+        stats['q3_available'] = stats['q3_total'] - stats['q3_alloc']
+        stats['q4_available'] = stats['q4_total'] - stats['q4_alloc']
+
+        stats['q1_alloc_fill'] = (stats['q1_alloc'] / q1_t * 100) if q1_t > 0 else 0
+        stats['q2_alloc_fill'] = (stats['q2_alloc'] / q2_t * 100) if q2_t > 0 else 0
+        stats['q3_alloc_fill'] = (stats['q3_alloc'] / q3_t * 100) if q3_t > 0 else 0
+        stats['q4_alloc_fill'] = (stats['q4_alloc'] / q4_t * 100) if q4_t > 0 else 0
+
+        # Detalle para Tooltips (Desglose por partida)
+        def get_q_tooltip(q_idx):
+            field_name = f'q{q_idx}_amount'
+            alloc_field = f'q{q_idx}_a'
+            q_credits = credits.annotate(
+                q_total=F(field_name),
+                q_alloc=Coalesce(Sum(f'allocations__{field_name}'), 0, output_field=models.DecimalField())
+            ).filter(models.Q(q_total__gt=0) | models.Q(q_alloc__gt=0))
+            
+            table_rows = []
+            for c in q_credits:
+                avail = c.q_total - c.q_alloc
+                t_str = f"{c.q_total:,.0f}".replace(",", ".")
+                a_str = f"{c.q_alloc:,.0f}".replace(",", ".")
+                v_str = f"{avail:,.0f}".replace(",", ".")
+                
+                table_rows.append(
+                    f"<tr>"
+                    f"  <td class='small fw-bold'>{c}</td>"
+                    f"  <td class='text-end small'>${t_str}</td>"
+                    f"  <td class='text-end small text-success fw-bold'>${a_str}</td>"
+                    f"  <td class='text-end small text-info fw-bold'>${v_str}</td>"
+                    f"</tr>"
+                )
+            
+            if not table_rows:
+                return "<p class='text-muted text-center my-3'>No hay movimientos en este trimestre.</p>"
+
+            table_header = (
+                "<div class='table-responsive'>"
+                "<table class='table table-sm table-hover align-middle mb-0'>"
+                "  <thead class='bg-light text-muted'>"
+                "    <tr style='font-size: 0.75rem; text-transform: uppercase;'>"
+                "      <th class='ps-2'>Partida / Crédito</th>"
+                "      <th class='text-end'>Presupuesto</th>"
+                "      <th class='text-end'>Distribuido</th>"
+                "      <th class='text-end'>Disponible</th>"
+                "    </tr>"
+                "  </thead>"
+                "  <tbody>"
+            )
+            return table_header + "".join(table_rows) + "</tbody></table></div>"
+
+        stats['q1_tooltip'] = get_q_tooltip(1)
+        stats['q2_tooltip'] = get_q_tooltip(2)
+        stats['q3_tooltip'] = get_q_tooltip(3)
+        stats['q4_tooltip'] = get_q_tooltip(4)
+
+        # Ancho relativo de cada segmento (trimestre) respecto al total del presupuesto anual
+        total_q = stats['total_credit']
         stats['q1_seg'] = (q1_t / total_q * 100) if total_q > 0 else 0
         stats['q2_seg'] = (q2_t / total_q * 100) if total_q > 0 else 0
         stats['q3_seg'] = (q3_t / total_q * 100) if total_q > 0 else 0
@@ -179,14 +237,16 @@ def credit_detail(request, pk):
     total = credit.total_amount
     q1, q2, q3, q4 = credit.q1_amount, credit.q2_amount, credit.q3_amount, credit.q4_amount
     
-    rem = total_allocated
-    q1_fill = (min(rem, q1) / q1 * 100) if q1 > 0 else 0
-    rem = max(0, rem - q1)
-    q2_fill = (min(rem, q2) / q2 * 100) if q2 > 0 else 0
-    rem = max(0, rem - q2)
-    q3_fill = (min(rem, q3) / q3 * 100) if q3 > 0 else 0
-    rem = max(0, rem - q3)
-    q4_fill = (min(rem, q4) / q4 * 100) if q4 > 0 else 0
+    # Cálculo de anchos para la barra de progreso segmentada REAL
+    q1_a = allocations.aggregate(Sum('q1_amount'))['q1_amount__sum'] or 0
+    q2_a = allocations.aggregate(Sum('q2_amount'))['q2_amount__sum'] or 0
+    q3_a = allocations.aggregate(Sum('q3_amount'))['q3_amount__sum'] or 0
+    q4_a = allocations.aggregate(Sum('q4_amount'))['q4_amount__sum'] or 0
+
+    q1_fill = (q1_a / q1 * 100) if q1 > 0 else 0
+    q2_fill = (q2_a / q2 * 100) if q2 > 0 else 0
+    q3_fill = (q3_a / q3 * 100) if q3 > 0 else 0
+    q4_fill = (q4_a / q4 * 100) if q4 > 0 else 0
     
     # Ancho relativo de cada segmento (trimestre) respecto al total
     q1_seg = (q1 / total * 100) if total > 0 else 0
@@ -338,6 +398,40 @@ def credit_delete(request, pk):
         'cancel_url': 'budget:credit_list'
     })
 
+def credit_bulk_delete(request):
+    if not request.user.is_superuser:
+        messages.error(request, "Solo los superusuarios pueden realizar esta acción.")
+        return redirect('budget:credit_list')
+    
+    if request.method == 'POST':
+        ids = request.POST.getlist('selected_ids')
+        if not ids:
+            messages.warning(request, "No se seleccionaron créditos para eliminar.")
+            return redirect('budget:credit_list')
+        
+        from django.db.models import Count
+        
+        # Obtener todos los seleccionados con el conteo de distribuciones
+        all_selected = BudgetCredit.objects.filter(pk__in=ids).annotate(
+            alloc_count=Count('allocations')
+        )
+        
+        # Separar los que se pueden borrar de los que no
+        to_delete = all_selected.filter(alloc_count=0)
+        protected = all_selected.filter(alloc_count__gt=0)
+        
+        deleted_count = to_delete.count()
+        protected_count = protected.count()
+        
+        if deleted_count > 0:
+            to_delete.delete()
+            messages.success(request, f"Se eliminaron {deleted_count} créditos exitosamente.")
+            
+        if protected_count > 0:
+            messages.warning(request, f"{protected_count} créditos no se pudieron eliminar porque ya tienen distribuciones asignadas.")
+            
+    return redirect('budget:credit_list')
+
 
 def credit_unassign_type(request, pk):
     """Removes the credit_type from a single credit with an optional reason, logging the event."""
@@ -450,7 +544,10 @@ def allocation_create(request):
                 services.allocate_credit(
                     credit=form.cleaned_data['credit'], 
                     unit=form.cleaned_data['unit'], 
-                    amount=form.cleaned_data['allocated_amount'], 
+                    q1=form.cleaned_data['q1_amount'], 
+                    q2=form.cleaned_data['q2_amount'], 
+                    q3=form.cleaned_data['q3_amount'], 
+                    q4=form.cleaned_data['q4_amount'], 
                     notes=form.cleaned_data['notes']
                 )
                 if fixed_credit:
@@ -492,6 +589,42 @@ def allocation_delete(request, pk):
         'title': f"Eliminar Distribución: {allocation}",
         'cancel_url': 'budget:allocation_list'
     })
+
+def allocation_bulk_delete(request):
+    if not request.user.is_superuser:
+        messages.error(request, "Solo los superusuarios pueden realizar esta acción.")
+        return redirect('budget:allocation_list')
+    
+    if request.method == 'POST':
+        ids = request.POST.getlist('selected_ids')
+        if not ids:
+            messages.warning(request, "No se seleccionaron distribuciones para eliminar.")
+            return redirect('budget:allocation_list')
+        
+        from django.db.models import Count
+        
+        # Obtener todas las seleccionadas con el conteo de ejecuciones
+        all_selected = BudgetAllocation.objects.filter(pk__in=ids).annotate(
+            exec_count=Count('executions')
+        )
+        
+        # Separar las que se pueden borrar de las que no
+        to_delete = all_selected.filter(exec_count=0)
+        protected = all_selected.filter(exec_count__gt=0)
+        
+        deleted_count = to_delete.count()
+        protected_count = protected.count()
+        
+        if deleted_count > 0:
+            # Eliminar las permitidas
+            to_delete.delete()
+            messages.success(request, f"Se eliminaron {deleted_count} distribuciones exitosamente.")
+            
+        if protected_count > 0:
+            # Informar sobre las protegidas
+            messages.warning(request, f"{protected_count} distribuciones no se pudieron eliminar porque ya tienen gastos (ejecuciones) registrados.")
+            
+    return redirect('budget:allocation_list')
 
 def execution_list(request):
     if is_admin(request.user): executions = BudgetExecution.objects.all()
