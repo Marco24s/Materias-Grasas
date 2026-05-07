@@ -454,7 +454,10 @@
                                             </thead>
                                             <tbody>
                                                 {% for alloc in row.allocations %}
-                                                <tr class="border-bottom border-light allocation-selectable-row" data-available="{{ alloc.available|unlocalize }}">
+                                                <tr class="border-bottom border-light allocation-selectable-row" 
+                                                    data-total="{{ alloc.total|unlocalize }}" 
+                                                    data-spent="{{ alloc.spent|unlocalize }}" 
+                                                    data-available="{{ alloc.available|unlocalize }}">
                                                     <td class="py-2">
                                                         <input type="checkbox" class="form-check-input allocation-checkbox">
                                                     </td>
@@ -475,12 +478,14 @@
                                                 </tr>
                                                 {% endfor %}
                                             </tbody>
-                                            <tfoot>
+                                             <tfoot>
                                                 <tr class="bg-success bg-opacity-10 d-none selection-summary-row">
-                                                    <td colspan="4" class="text-end py-2 small fw-bold">SUMA SELECCIONADA:</td>
-                                                    <td class="text-end py-2 fw-bold text-success selection-total-cell" style="font-size: 1rem;">$0,00</td>
+                                                    <td colspan="2" class="text-end py-2 small fw-bold">SUMA SELECCIONADA:</td>
+                                                    <td class="text-end py-2 fw-bold text-primary selection-total-cell">$0,00</td>
+                                                    <td class="text-end py-2 fw-bold text-danger selection-spent-cell">-$0,00</td>
+                                                    <td class="text-end py-2 fw-bold text-success selection-available-cell" style="font-size: 1.1rem;">$0,00</td>
                                                 </tr>
-                                            </tfoot>
+                                             </tfoot>
                                         </table>
                                     </div>
                                 </div>
@@ -551,11 +556,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const checkboxes = table.querySelectorAll('.allocation-checkbox:checked');
         const summaryRow = table.querySelector('.selection-summary-row');
         const totalCell = table.querySelector('.selection-total-cell');
+        const spentCell = table.querySelector('.selection-spent-cell');
+        const availableCell = table.querySelector('.selection-available-cell');
         
-        let total = 0;
+        let sumTotal = 0;
+        let sumSpent = 0;
+        let sumAvailable = 0;
+
         checkboxes.forEach(cb => {
             const row = cb.closest('.allocation-selectable-row');
-            total += parseFloat(row.dataset.available || 0);
+            sumTotal += parseFloat(row.dataset.total || 0);
+            sumSpent += parseFloat(row.dataset.spent || 0);
+            sumAvailable += parseFloat(row.dataset.available || 0);
             row.classList.add('bg-success', 'bg-opacity-10');
         });
 
@@ -566,7 +578,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (checkboxes.length > 0) {
             summaryRow.classList.remove('d-none');
-            totalCell.textContent = formatCurrency(total);
+            totalCell.textContent = formatCurrency(sumTotal);
+            spentCell.textContent = "-" + formatCurrency(sumSpent);
+            availableCell.textContent = formatCurrency(sumAvailable);
         } else {
             summaryRow.classList.add('d-none');
         }

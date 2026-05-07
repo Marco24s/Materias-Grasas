@@ -55,8 +55,18 @@
                             <div class="fw-bold text-primary">{{ credit.pre_inc.code|default:"00" }}</div>
                             <small class="text-muted" style="font-size: 0.7rem;">({{ credit.pp_inc.code|default:"0" }}-{{ credit.ppp_inc.code|default:"0" }})</small>
                         </td>
-                        <td class="text-end fw-bold text-dark" style="white-space: nowrap;">
-                            ${{ credit.total_amount|floatformat:2 }}
+                        <td class="text-end" style="width: 220px;">
+                            <div class="fw-bold text-dark mb-1">${{ credit.total_amount|floatformat:2 }}</div>
+                            {% with distributed=credit.distributed_amount|default:0 total=credit.total_amount %}
+                            {% widthratio distributed total 100 as percent %}
+                            <div class="progress shadow-sm" style="height: 6px; background-color: #198754;" 
+                                 title="Distribuido: ${{ distributed|floatformat:2 }} ({{ percent }}%)">
+                                <div class="progress-bar bg-danger" role="progressbar" 
+                                     style="width: {{ percent }}%" aria-valuenow="{{ percent }}" 
+                                     aria-valuemin="0" aria-valuemax="100">
+                                </div>
+                            </div>
+                            {% endwith %}
                         </td>
                         <td class="text-center">
                             {% if credit.credit_type %}

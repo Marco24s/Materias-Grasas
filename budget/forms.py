@@ -248,32 +248,31 @@ class BudgetClassificationForm(forms.ModelForm):
             'notes': 'Notas / Descripción'
         }
 
-class BudgetCreditMultipleChoiceField(forms.ModelMultipleChoiceField):
+class BudgetAllocationMultipleChoiceField(forms.ModelMultipleChoiceField):
     def label_from_instance(self, obj):
-        amount_str = f"{obj.total_amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        return f"{obj} — [Total: ${amount_str}]"
+        amount_str = f"{obj.allocated_amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"{obj.unit.name} — {obj.credit} [Total: ${amount_str}]"
 
 class BudgetClassificationAssignForm(forms.Form):
-    # This form is used from the classification perspective to pull credits into itself
-    credits = BudgetCreditMultipleChoiceField(
-        queryset=BudgetCredit.objects.all(),
+    # This form is used from the classification perspective to pull allocations into itself
+    allocations = BudgetAllocationMultipleChoiceField(
+        queryset=BudgetAllocation.objects.all(),
         widget=forms.CheckboxSelectMultiple,
         required=False,
-        label="Seleccionar Créditos"
+        label="Seleccionar Créditos Distribuidos"
     )
 
     def __init__(self, *args, **kwargs):
         self.classification = kwargs.pop('classification', None)
         super().__init__(*args, **kwargs)
         if self.classification:
-            # Set initial checked instances (credit items)
-            self.fields['credits'].initial = self.classification.credits.all()
+            # Set initial checked instances (allocation items)
+            self.fields['allocations'].initial = self.classification.allocations.all()
             
-            # Since credits have fiscal years, let's limit choices if needed.
-            # Right now let's just make sure active fiscal year is considered if any, or order by fiscal_year
-            self.fields['credits'].queryset = BudgetCredit.objects.all().select_related(
-                'fiscal_year', 'ff', 'programa', 'subprog', 'inc', 'ppp_inc', 'pp_inc', 'pre_inc'
-            ).order_by('-fiscal_year__year')
+            self.fields['allocations'].queryset = BudgetAllocation.objects.all().select_related(
+                'unit', 'credit__fiscal_year', 'credit__ff', 'credit__programa', 
+                'credit__subprog', 'credit__inc', 'credit__ppp_inc', 'credit__pp_inc', 'credit__pre_inc'
+            ).order_by('-credit__fiscal_year__year', 'unit__name')
 
 class BudgetCompensacionForm(forms.ModelForm):
     class Meta:

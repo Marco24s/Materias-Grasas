@@ -24,33 +24,44 @@
                         <th>Unidad Destinataria</th>
                         <th>Nomenclatura (SUBPC - PARCIAL - PPAL)</th>
                         <th>Ref. Crédito (FF - S.PROG)</th>
-                        <th class="text-end">Monto Asignado (Techo)</th>
+                        <th class="text-end">Monto Asignado</th>
+                        <th class="text-end">Gastado</th>
+                        <th class="text-end">Disponible</th>
                         <th class="text-end pe-4">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for alloc in allocations %}
-                    <tr class="allocation-row" data-amount="{{ alloc.allocated_amount|unlocalize }}">
-                        <td class="ps-4">
-                            <div class="form-check">
-                                <input class="form-check-input select-item" type="checkbox" name="selected_ids" value="{{ alloc.id }}">
-                            </div>
-                        </td>
-                        <td>
-                            <div class="fw-bold fs-6">{{ alloc.unit.name }}</div>
-                            <small class="text-muted">{{ alloc.unit.code|default:"" }}</small>
-                        </td>
-                        <td>
-                            <span class="small text-dark fw-bold">{{ alloc.credit.pre_inc.code|default:"00" }}</span>
-                            <small class="text-muted">({{ alloc.credit.pp_inc.code|default:"0" }}-{{ alloc.credit.ppp_inc.code|default:"0" }})</small>
-                        </td>
-                        <td>
-                            <div class="small text-dark fw-bold">{{ alloc.credit.ff.code }} - {{ alloc.credit.subprog.code }}</div>
-                            <small class="text-muted">{{ alloc.credit.programa.code }}</small>
-                        </td>
-                        <td class="text-end fw-bold text-success">
-                            ${{ alloc.allocated_amount|localize }}
-                        </td>
+                        <tr class="allocation-row" 
+                            data-amount="{{ alloc.allocated_amount|unlocalize }}"
+                            data-spent="{{ alloc.spent_amount|unlocalize }}"
+                            data-available="{{ alloc.available_amount|unlocalize }}">
+                            <td class="ps-4">
+                                <div class="form-check">
+                                    <input class="form-check-input select-item" type="checkbox" name="selected_ids" value="{{ alloc.id }}">
+                                </div>
+                            </td>
+                            <td>
+                                <div class="fw-bold fs-6">{{ alloc.unit.name }}</div>
+                                <small class="text-muted">{{ alloc.unit.code|default:"" }}</small>
+                            </td>
+                            <td>
+                                <span class="small text-dark fw-bold">{{ alloc.credit.pre_inc.code|default:"00" }}</span>
+                                <small class="text-muted">({{ alloc.credit.pp_inc.code|default:"0" }}-{{ alloc.credit.ppp_inc.code|default:"0" }})</small>
+                            </td>
+                            <td>
+                                <div class="small text-dark fw-bold">{{ alloc.credit.ff.code }} - {{ alloc.credit.subprog.code }}</div>
+                                <small class="text-muted">{{ alloc.credit.programa.code }}</small>
+                            </td>
+                            <td class="text-end fw-bold text-primary">
+                                ${{ alloc.allocated_amount|localize }}
+                            </td>
+                            <td class="text-end text-danger">
+                                -${{ alloc.spent_amount|localize }}
+                            </td>
+                            <td class="text-end text-success fw-bold">
+                                ${{ alloc.available_amount|localize }}
+                            </td>
                         <td class="text-end pe-4">
                             <div class="btn-group">
                                 <a href="{% url 'budget:execution_commitment' %}?allocation={{ alloc.id }}" class="btn btn-sm btn-outline-warning rounded-pill px-3 me-1" title="Registrar Gasto (Compromiso)">
@@ -66,7 +77,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center py-5">
+                        <td colspan="8" class="text-center py-5">
                             <div class="text-muted">
                                 <i class="fa-solid fa-share-nodes fa-3x mb-3 d-block opacity-25"></i>
                                 No hay distribuciones registradas para las unidades componentes.
@@ -88,8 +99,10 @@
                 <span id="selected-count" class="fw-bold text-success">0</span> seleccionados
             </div>
             <div class="vr bg-secondary opacity-50" style="height: 24px;"></div>
-            <div class="fs-6">
-                Total: <span id="selected-sum" class="fw-bold text-success">$0,00</span>
+            <div class="fs-6 d-flex gap-4">
+                <div>Asignado: <span id="selected-sum" class="fw-bold text-primary">$0,00</span></div>
+                <div>Gastado: <span id="selected-spent" class="fw-bold text-danger">$0,00</span></div>
+                <div>Disponible: <span id="selected-available" class="fw-bold text-success">$0,00</span></div>
             </div>
             <div class="vr bg-secondary opacity-50" style="height: 24px;"></div>
             <div class="d-flex gap-2">
@@ -139,14 +152,21 @@ document.addEventListener('DOMContentLoaded', function() {
             bulkBar.classList.remove('d-none');
             selectedCountSpan.textContent = count;
             
-            let sum = 0;
+            let sumTotal = 0;
+            let sumSpent = 0;
+            let sumAvailable = 0;
+            
             checkedItems.forEach(item => {
                 const row = item.closest('.allocation-row');
-                sum += parseFloat(row.dataset.amount || 0);
+                sumTotal += parseFloat(row.dataset.amount || 0);
+                sumSpent += parseFloat(row.dataset.spent || 0);
+                sumAvailable += parseFloat(row.dataset.available || 0);
                 row.classList.add('selected');
             });
             
-            selectedSumSpan.textContent = formatCurrency(sum);
+            document.getElementById('selected-sum').textContent = formatCurrency(sumTotal);
+            document.getElementById('selected-spent').textContent = formatCurrency(sumSpent);
+            document.getElementById('selected-available').textContent = formatCurrency(sumAvailable);
         } else {
             bulkBar.classList.add('d-none');
         }

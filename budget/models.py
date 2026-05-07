@@ -82,7 +82,6 @@ class BudgetClassification(models.Model):
 
 class BudgetCredit(models.Model):
     fiscal_year = models.ForeignKey(BudgetFiscalYear, on_delete=models.PROTECT, related_name="credits", verbose_name="Ejercicio")
-    custom_classes = models.ManyToManyField(BudgetClassification, blank=True, related_name='credits', verbose_name="Clasificaciones Especiales")
     credit_type = models.ForeignKey(BudgetCreditType, on_delete=models.PROTECT, null=True, blank=True, related_name='credits', verbose_name="Tipo de Crédito")
     ff = models.ForeignKey(BudgetFF, on_delete=models.PROTECT, verbose_name="FF", null=True, blank=True)
     programa = models.ForeignKey(BudgetProg, on_delete=models.PROTECT, verbose_name="Programa", null=True, blank=True)
@@ -123,6 +122,7 @@ class BudgetCredit(models.Model):
 class BudgetAllocation(models.Model):
     credit = models.ForeignKey(BudgetCredit, on_delete=models.PROTECT, related_name="allocations", verbose_name="Crédito Origen")
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="budget_allocations", verbose_name="Unidad Destino")
+    custom_classes = models.ManyToManyField(BudgetClassification, blank=True, related_name='allocations', verbose_name="Clasificaciones Especiales")
     q1_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto T1")
     q2_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto T2")
     q3_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto T3")
@@ -141,6 +141,15 @@ class BudgetAllocation(models.Model):
     @property
     def available_amount(self):
         return self.allocated_amount - self.spent_amount
+
+    @property
+    def get_quarters_display(self):
+        qs = []
+        if self.q1_amount > 0: qs.append("T1")
+        if self.q2_amount > 0: qs.append("T2")
+        if self.q3_amount > 0: qs.append("T3")
+        if self.q4_amount > 0: qs.append("T4")
+        return ", ".join(qs) if qs else "--"
 
     def __str__(self):
         return f"Distribución {self.unit.name} - {self.credit}"

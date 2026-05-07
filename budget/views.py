@@ -201,14 +201,19 @@ def fiscal_year_close(request, pk):
     return render(request, 'budget/fiscal_year_close.html', {'year': year, 'pending_reprogram': pending_reprogram})
 
 def credit_list(request):
+    from django.db.models import Sum
     if is_admin(request.user):
-        credits = BudgetCredit.objects.all().order_by(
+        credits = BudgetCredit.objects.annotate(
+            distributed_amount=Sum('allocations__allocated_amount')
+        ).order_by(
             'fiscal_year', 'ff', 'programa', 'subprog',
             'inc__code', 'ppp_inc__code', 'pp_inc__code', 
             'pre_inc__code', 'incisos_agrupado__code'
         )
     else:
-        credits = BudgetCredit.objects.filter(allocations__unit=request.user.unit).distinct()
+        credits = BudgetCredit.objects.filter(allocations__unit=request.user.unit).annotate(
+            distributed_amount=Sum('allocations__allocated_amount')
+        ).distinct()
         
     credit_by_type = (
         credits.filter(credit_type__isnull=False)
@@ -258,6 +263,9 @@ def credit_detail(request, pk):
     total_spent = allocations.aggregate(Sum('spent_amount'))['spent_amount__sum'] or 0
     execution_percent = (total_spent / total_allocated * 100) if total_allocated > 0 else 0
 
+    # Remanentes trimestrales
+    q_rems = [q1 - q1_a, q2 - q2_a, q3 - q3_a, q4 - q4_a]
+
     context = {
         'credit': credit,
         'allocations': allocations,
@@ -267,6 +275,7 @@ def credit_detail(request, pk):
         'execution_percent': execution_percent,
         'q_fills': [q1_fill, q2_fill, q3_fill, q4_fill],
         'q_segs': [q1_seg, q2_seg, q3_seg, q4_seg],
+        'q_rems': q_rems,
         'is_admin': is_admin(request.user),
     }
     return render(request, 'budget/credit_detail.html', context)
@@ -937,7 +946,7 @@ def _get_catalog_config(catalog_type):
 
 def classification_list(request):
     classes = BudgetClassification.objects.annotate(
-        total_assigned=Sum('credits__total_amount')
+        total_assigned=Sum('allocations__allocated_amount')
     ).order_by('name')
     
     grand_total = sum((c.total_assigned or Decimal('0')) for c in classes)
@@ -987,9 +996,9 @@ def classification_assign(request, pk):
     if request.method == 'POST':
         form = BudgetClassificationAssignForm(request.POST, classification=c)
         if form.is_valid():
-            # Assign this classification to the selected credits (M2M)
-            selected_credits = form.cleaned_data['credits']
-            c.credits.set(selected_credits)
+            # Assign this classification to the selected allocations (M2M)
+            selected_allocs = form.cleaned_data['allocations']
+            c.allocations.set(selected_allocs)
                 
             messages.success(request, f"Créditos asignados a {c.name}.")
             return redirect('budget:classification_list')
@@ -1000,56 +1009,49 @@ def classification_assign(request, pk):
 
 def classification_detail(request, pk):
     classification = get_object_or_404(BudgetClassification, pk=pk)
-    credits = classification.credits.all().select_related(
-        'fiscal_year', 'ff', 'programa', 'subprog', 'inc', 'ppp_inc', 'pp_inc', 'pre_inc'
+    allocations = classification.allocations.all().select_related(
+        'unit', 'credit__fiscal_year', 'credit__ff', 'credit__programa', 
+        'credit__subprog', 'credit__inc', 'credit__ppp_inc', 'credit__pp_inc', 'credit__pre_inc'
     )
     
-    total_assigned = Decimal('0')
     total_allocated = Decimal('0')
     total_spent = Decimal('0')
     total_accrued = Decimal('0')
     total_paid = Decimal('0')
     
-    credit_details = []
+    allocation_details = []
     
-    for cr in credits:
-        allocated = BudgetAllocation.objects.filter(credit=cr).aggregate(Sum('allocated_amount'))['allocated_amount__sum'] or Decimal('0')
-        spent = BudgetAllocation.objects.filter(credit=cr).aggregate(Sum('spent_amount'))['spent_amount__sum'] or Decimal('0')
-        
-        execs_stats = BudgetExecution.objects.filter(allocation__credit=cr).aggregate(
+    for alloc in allocations:
+        execs_stats = BudgetExecution.objects.filter(allocation=alloc).aggregate(
             t_accrued=Sum('accrued_amount'),
             t_paid=Sum('paid_amount')
         )
         accrued = execs_stats['t_accrued'] or Decimal('0')
         paid = execs_stats['t_paid'] or Decimal('0')
         
-        total_assigned += cr.total_amount
-        total_allocated += allocated
-        total_spent += spent
+        total_allocated += alloc.allocated_amount
+        total_spent += alloc.spent_amount
         total_accrued += accrued
         total_paid += paid
         
-        credit_details.append({
-            'credit': cr,
-            'allocated': allocated,
-            'spent': spent,
+        allocation_details.append({
+            'allocation': alloc,
+            'spent': alloc.spent_amount,
             'accrued': accrued,
             'paid': paid,
         })
         
     stats = {
-        'total_assigned': total_assigned,
         'total_allocated': total_allocated,
         'total_spent': total_spent,
         'total_accrued': total_accrued,
         'total_paid': total_paid,
-        'available_to_allocate': total_assigned - total_allocated,
         'available_to_execute': total_allocated - total_spent
     }
 
     return render(request, 'budget/classification_detail.html', {
         'classification': classification,
         'stats': stats,
-        'credit_details': credit_details
+        'allocation_details': allocation_details
     })
 
