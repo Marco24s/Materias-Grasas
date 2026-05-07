@@ -28,6 +28,7 @@ def is_admin(user):
 
 def dashboard(request):
     fiscal_year = BudgetFiscalYear.objects.filter(status='OPEN').first()
+    is_admin_user = is_admin(request.user)
     stats = {
         'total_credit': 0, 'total_allocated': 0, 'total_commitment': 0,
         'total_accrued': 0, 'total_paid': 0, 'available_to_allocate': 0,
@@ -149,14 +150,22 @@ def dashboard(request):
         stats['q4_seg'] = (q4_t / total_q * 100) if total_q > 0 else 0
 
         # Desglose por Tipo de Crédito
-        stats['credit_by_type'] = (
-            credits.filter(credit_type__isnull=False)
-            .values('credit_type__name', 'credit_type__code')
-            .annotate(subtotal=Sum('total_amount'))
-            .order_by('credit_type__code')
-        )
+        if is_admin_user:
+            stats['credit_by_type'] = (
+                credits.filter(credit_type__isnull=False)
+                .values('credit_type__name', 'credit_type__code')
+                .annotate(subtotal=Sum('total_amount'))
+                .order_by('credit_type__code')
+            )
+        else:
+            stats['credit_by_type'] = (
+                credits.filter(credit_type__isnull=False)
+                .values('credit_type__name', 'credit_type__code')
+                .annotate(subtotal=Sum('allocations__allocated_amount', filter=Q(allocations__unit=request.user.unit)))
+                .order_by('credit_type__code')
+            )
 
-    return render(request, 'budget/dashboard.html', {'fiscal_year': fiscal_year, 'stats': stats, 'unit_report': unit_report, 'is_admin': is_admin(request.user)})
+    return render(request, 'budget/dashboard.html', {'fiscal_year': fiscal_year, 'stats': stats, 'unit_report': unit_report, 'is_admin': is_admin_user})
 
 def fiscal_year_list(request):
     if not is_admin(request.user): return redirect('budget:dashboard')
@@ -201,8 +210,10 @@ def fiscal_year_close(request, pk):
     return render(request, 'budget/fiscal_year_close.html', {'year': year, 'pending_reprogram': pending_reprogram})
 
 def credit_list(request):
-    from django.db.models import Sum
-    if is_admin(request.user):
+    from django.db.models import Sum, Q
+    is_admin_user = is_admin(request.user)
+    
+    if is_admin_user:
         credits = BudgetCredit.objects.annotate(
             distributed_amount=Sum('allocations__allocated_amount')
         ).order_by(
@@ -210,23 +221,39 @@ def credit_list(request):
             'inc__code', 'ppp_inc__code', 'pp_inc__code', 
             'pre_inc__code', 'incisos_agrupado__code'
         )
-    else:
-        credits = BudgetCredit.objects.filter(allocations__unit=request.user.unit).annotate(
-            distributed_amount=Sum('allocations__allocated_amount')
-        ).distinct()
         
-    credit_by_type = (
-        credits.filter(credit_type__isnull=False)
-        .values('credit_type__name', 'credit_type__code')
-        .annotate(subtotal=Sum('total_amount'))
-        .order_by('credit_type__name')
-    )
-    unassigned_total = credits.filter(credit_type__isnull=True).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+        credit_by_type = (
+            credits.filter(credit_type__isnull=False)
+            .values('credit_type__name', 'credit_type__code')
+            .annotate(subtotal=Sum('total_amount'))
+            .order_by('credit_type__name')
+        )
+        unassigned_total = credits.filter(credit_type__isnull=True).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    else:
+        # Para unidades, mostramos solo sus distribuciones
+        credits = BudgetCredit.objects.filter(allocations__unit=request.user.unit).annotate(
+            distributed_amount=Sum('allocations__allocated_amount', filter=Q(allocations__unit=request.user.unit))
+        ).distinct().order_by(
+            'fiscal_year', 'ff', 'programa', 'subprog',
+            'inc__code', 'ppp_inc__code', 'pp_inc__code', 
+            'pre_inc__code', 'incisos_agrupado__code'
+        )
+        
+        credit_by_type = (
+            credits.filter(credit_type__isnull=False)
+            .values('credit_type__name', 'credit_type__code')
+            .annotate(subtotal=Sum('allocations__allocated_amount', filter=Q(allocations__unit=request.user.unit)))
+            .order_by('credit_type__name')
+        )
+        unassigned_total = credits.filter(credit_type__isnull=True).aggregate(
+            total=Sum('allocations__allocated_amount', filter=Q(allocations__unit=request.user.unit))
+        )['total'] or 0
 
     return render(request, 'budget/credit_list.html', {
         'credits': credits,
         'credit_by_type': credit_by_type,
-        'unassigned_total': unassigned_total
+        'unassigned_total': unassigned_total,
+        'is_admin': is_admin_user
     })
 
 def credit_detail(request, pk):
