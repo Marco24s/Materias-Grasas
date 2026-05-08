@@ -29,7 +29,8 @@ load_dotenv(BASE_DIR / ".env")
 
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure--(vzl$vo3)i2w(7t9i=l9#zsv9fl&cf4a^2nvmzi2&5l$oeu3@')
+SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
+#SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure--(vzl$vo3)i2w(7t9i=l9#zsv9fl&cf4a^2nvmzi2&5l$oeu3@')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
@@ -91,10 +92,16 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+
+# Configuración de base de datos usando variables de entorno
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
+        'ENGINE': os.environ.get('DJANGO_DB_ENGINE', 'django.db.backends.sqlite3'),
         'NAME': os.environ.get('DJANGO_DB_NAME', BASE_DIR / 'db.sqlite3'),
+        'USER': os.environ.get('DJANGO_DB_USER', ''),
+        'PASSWORD': os.environ.get('DJANGO_DB_PASSWORD', ''),
+        'HOST': os.environ.get('DJANGO_DB_HOST', ''),
+        'PORT': os.environ.get('DJANGO_DB_PORT', ''),
     }
 }
 
