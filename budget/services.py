@@ -230,6 +230,8 @@ def get_unit_execution_report(fiscal_year):
         for alloc in allocations:
             credit_details.append({
                 'nomenclature': str(alloc.credit),
+                'subpc': alloc.credit.pre_inc.code if alloc.credit.pre_inc else "--",
+                'quarters': alloc.get_quarters_display,
                 'total': alloc.allocated_amount,
                 'spent': alloc.spent_amount,
                 'available': alloc.allocated_amount - alloc.spent_amount,

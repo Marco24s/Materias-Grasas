@@ -455,7 +455,8 @@
                                             <thead>
                                                 <tr class="text-muted small">
                                                     <th style="width: 30px;"></th>
-                                                    <th>Nomenclatura (FF-PROG-SUBP-INC-PP-PA-PC-MON)</th>
+                                                    <th>SUBPC</th>
+                                                    <th class="text-center">Trimestre</th>
                                                     <th class="text-end">Monto Asignado</th>
                                                     <th class="text-end">Gastado</th>
                                                     <th class="text-end">Disponible</th>
@@ -473,13 +474,16 @@
                                                     <td class="small py-2">
                                                         <div class="fw-semibold">
                                                             <span class="badge bg-secondary-subtle text-secondary me-2">{{ alloc.ff }}</span>
-                                                            {{ alloc.nomenclature }}
+                                                            {{ alloc.subpc }}
                                                         </div>
                                                         {% if alloc.notes %}
                                                         <div class="text-muted mt-1 italic" style="font-size: 0.75rem;">
                                                             <i class="fa-solid fa-comment-dots me-1 opacity-50"></i>{{ alloc.notes }}
                                                         </div>
                                                         {% endif %}
+                                                    </td>
+                                                    <td class="text-center py-2">
+                                                        <span class="badge bg-light text-dark border-0 shadow-sm" style="font-size: 0.7rem;">{{ alloc.quarters }}</span>
                                                     </td>
                                                     <td class="text-end py-2">${{ alloc.total|floatformat:2 }}</td>
                                                     <td class="text-end py-2 text-danger">-${{ alloc.spent|floatformat:2 }}</td>
@@ -489,7 +493,7 @@
                                             </tbody>
                                              <tfoot>
                                                 <tr class="bg-success bg-opacity-10 d-none selection-summary-row">
-                                                    <td colspan="2" class="text-end py-2 small fw-bold">SUMA SELECCIONADA:</td>
+                                                    <td colspan="3" class="text-end py-2 small fw-bold">SUMA SELECCIONADA:</td>
                                                     <td class="text-end py-2 fw-bold text-primary selection-total-cell">$0,00</td>
                                                     <td class="text-end py-2 fw-bold text-danger selection-spent-cell">-$0,00</td>
                                                     <td class="text-end py-2 fw-bold text-success selection-available-cell" style="font-size: 1.1rem;">$0,00</td>
@@ -566,6 +570,7 @@
                         <thead class="bg-light">
                             <tr class="small text-uppercase text-muted">
                                 <th><i class="fa-solid fa-building me-1 opacity-50"></i> Unidad</th>
+                                <th class="text-center">SUBPC</th>
                                 <th class="text-end">Monto Distribuido</th>
                             </tr>
                         </thead>
@@ -573,7 +578,7 @@
                         </tbody>
                         <tfoot>
                             <tr class="fw-bold border-top">
-                                <td class="text-muted">TOTAL</td>
+                                <td colspan="2" class="text-muted">TOTAL</td>
                                 <td class="text-end text-success" id="distrib-detail-total"></td>
                             </tr>
                         </tfoot>
@@ -681,6 +686,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <i class="fa-solid fa-building-user text-success me-2 opacity-50"></i>
                     ${item.unit}
                 </td>
+                <td class="text-center small fw-bold text-muted">${item.subpc || '--'}</td>
                 <td class="text-end small fw-bold text-success">$${item.amount}</td>
             `;
             distribTbody.appendChild(tr);

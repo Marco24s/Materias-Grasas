@@ -117,6 +117,7 @@ def dashboard(request):
                     if q_val > 0:
                         alloc_data.append({
                             'unit': alloc.unit.name,
+                            'subpc': c.pre_inc.code if c.pre_inc else "--",
                             'amount': f"{q_val:,.0f}".replace(",", "."),
                         })
 
