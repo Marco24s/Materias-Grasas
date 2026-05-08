@@ -14,12 +14,13 @@ def smart_number(value):
             d = value.normalize()
             if d == d.to_integral():
                 return int(d)
-            return round(d, 1)
+            return d
             
         f_val = float(value)
-        if f_val.is_integer():
-            return int(f_val)
-        return round(f_val, 1)
+        rounded_val = round(f_val, 4)
+        if rounded_val.is_integer():
+            return int(rounded_val)
+        return rounded_val
     except (ValueError, TypeError):
         return value
 
@@ -31,4 +32,14 @@ def abs_val(value):
     try:
         return abs(value)
     except TypeError:
+        return value
+@register.filter
+def add_decimal_inverse(value, arg):
+    """
+    Substracts the argument from the value (value - arg).
+    Used to calculate shortfalls.
+    """
+    try:
+        return Decimal(str(value)) - Decimal(str(arg))
+    except Exception:
         return value

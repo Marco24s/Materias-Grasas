@@ -18,7 +18,7 @@
                     <th>SIBYS</th>
                     <th>NATO</th>
                     <th>Normas MIL/Otras</th>
-                    <th>Presentación</th>
+                    <th>Unidad</th>
                     <th>Vida Útil (Meses)</th>
                     <th>Recertificable</th>
                     <th>Costo Est. / Uds</th>
@@ -33,7 +33,7 @@
                     <td>{{ grease.sibys|default:"-" }}</td>
                     <td>{{ grease.nato|default:"-" }}</td>
                     <td>{{ grease.normas_mil_otras|default:"-" }}</td>
-                    <td>{{ grease.presentacion }} {{ grease.unidad }}</td>
+                    <td>{{ grease.unidad }}</td>
                     <td>{{ grease.shelf_life_months }} meses</td>
                     <td>
                         {% if grease.recertification_allowed %}
@@ -53,6 +53,7 @@
                         {% if user.is_staff or 'Logistica' in user.groups.all|join:',' or 'Administrador' in user.groups.all|join:',' %}
                         <a href="{% url 'grease_price_list' grease.id %}" class="btn btn-sm btn-outline-success" title="Precios de Referencia"><i class="fa-solid fa-dollar-sign"></i> Precios</a>
                         <a href="{% url 'grease_update' grease.id %}" class="btn btn-sm btn-outline-secondary">Editar</a>
+                        <a href="{% url 'grease_delete' grease.id %}" class="btn btn-sm btn-outline-danger ms-1" title="Eliminar"><i class="fa-solid fa-trash"></i></a>
                         {% endif %}
                     </td>
                 </tr>

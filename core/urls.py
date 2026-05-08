@@ -2,7 +2,8 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('', views.home, name='home'),
+    path('', views.portal, name='portal'),
+    path('sgap/', views.home, name='home'),
     
     # Units
     path('units/', views.UnitListView.as_view(), name='unit_list'),
@@ -20,11 +21,13 @@ urlpatterns = [
     path('aircrafts/', views.AircraftListView.as_view(), name='aircraft_list'),
     path('aircrafts/add/', views.AircraftCreateView.as_view(), name='aircraft_create'),
     path('aircrafts/<int:pk>/edit/', views.AircraftUpdateView.as_view(), name='aircraft_update'),
+    path('aircrafts/<int:pk>/delete/', views.AircraftDeleteView.as_view(), name='aircraft_delete'),
     
     # Grease Types
     path('greases/', views.GreaseTypeListView.as_view(), name='grease_list'),
     path('greases/add/', views.GreaseTypeCreateView.as_view(), name='grease_create'),
     path('greases/<int:pk>/edit/', views.GreaseTypeUpdateView.as_view(), name='grease_update'),
+    path('greases/<int:pk>/delete/', views.GreaseTypeDeleteView.as_view(), name='grease_delete'),
     path('greases/<int:pk>/prices/', views.GreaseReferencePriceListView.as_view(), name='grease_price_list'),
     path('greases/<int:pk>/prices/add/', views.GreaseReferencePriceCreateView.as_view(), name='grease_price_create'),
     path('greases/prices/<int:pk>/edit/', views.GreaseReferencePriceUpdateView.as_view(), name='grease_price_update'),
@@ -48,6 +51,7 @@ urlpatterns = [
     path('stock/<int:pk>/archive/', views.ArchiveBatchView.as_view(), name='batch_archive'),
     path('stock/add/', views.GreaseBatchCreateView.as_view(), name='batch_create'),
     path('stock/<int:pk>/movements/', views.GreaseBatchDetailView.as_view(), name='batch_detail'),
+    path('stock/<int:pk>/edit/', views.GreaseBatchUpdateView.as_view(), name='batch_update'),
     path('stock/<int:pk>/delete/', views.GreaseBatchDeleteView.as_view(), name='batch_delete'),
     path('stock/<int:pk>/start-retest/', views.StartRetestView.as_view(), name='batch_start_retest'),
     path('stock/<int:pk>/retest/', views.RetestBatchView.as_view(), name='batch_retest'),

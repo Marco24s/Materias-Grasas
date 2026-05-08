@@ -47,6 +47,8 @@ INSTALLED_APPS = [
     'crispy_forms',
     'crispy_bootstrap5',
     'core',
+    'sigera',
+    'budget',
 ]
 
 AUTH_USER_MODEL = 'core.CustomUser'
@@ -121,8 +123,15 @@ LANGUAGE_CODE = 'es-ar'
 TIME_ZONE = 'America/Argentina/Buenos_Aires'
 
 USE_I18N = True
-
 USE_TZ = True
+USE_THOUSAND_SEPARATOR = True
+NUMBER_GROUPING = 3
+
+# Formateo de números (Argentina)
+USE_THOUSAND_SEPARATOR = True
+THOUSAND_SEPARATOR = '.'
+DECIMAL_SEPARATOR = ','
+NUMBER_GROUPING = 3
 
 
 # Static files (CSS, JavaScript, Images)
@@ -135,5 +144,10 @@ STATIC_ROOT = os.environ.get('DJANGO_STATIC_ROOT', BASE_DIR / 'staticfiles')
 MEDIA_ROOT = os.environ.get('DJANGO_MEDIA_ROOT', BASE_DIR / 'media')
 
 LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'home'
+LOGIN_REDIRECT_URL = 'portal'
 LOGOUT_REDIRECT_URL = 'login'
+
+# Default primary key field type
+# https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

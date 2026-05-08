@@ -123,8 +123,12 @@
 
             <!-- Tabla de Desglose -->
             <div class="card shadow-sm border-0 overflow-hidden">
-                <div class="card-header bg-white fw-bold border-bottom py-3">
-                    <i class="fa-solid fa-table me-2 text-primary"></i> Desglose de Consumo Estimado
+                <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                    <span class="fw-bold"><i class="fa-solid fa-table me-2 text-primary"></i> Desglose de Consumo Estimado</span>
+                    <div class="form-check form-switch mb-0 d-flex align-items-center gap-2" title="Oculta las grasas que no se consumen con los filtros seleccionados">
+                        <input class="form-check-input" type="checkbox" role="switch" id="toggleInactivas" {% if selected_aircraft_ids or selected_grease_ids %}checked{% endif %} onchange="toggleFilasInactivas(this.checked)">
+                        <label class="form-check-label small text-muted fw-normal" for="toggleInactivas">Solo grasas afectadas</label>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -133,6 +137,7 @@
                                 <tr>
                                     <th>Grasa (Nomenclatura)</th>
                                     <th class="text-end">Stock Disp.</th>
+                                    <th class="text-end">Autonomía (hs)</th>
                                     <th class="text-end">Consumo ({{ max_hours|floatformat:1 }}hs)</th>
                                     <th class="text-end">Remanente</th>
                                     <th class="text-center">Estado</th>
@@ -140,27 +145,42 @@
                             </thead>
                             <tbody>
                                 {% for item in breakdown %}
-                                <tr class="{% if item.is_bottleneck %}table-warning{% elif item.no_consumption %}table-light text-muted{% endif %}">
+                                <tr class="{% if item.is_bottleneck %}table-warning{% elif item.no_consumption %}table-light text-muted row-inactiva{% endif %}" {% if item.no_consumption %}data-inactiva="true"{% endif %}>
                                     <td>
                                         <div class="fw-bold">{{ item.nomenclatura }}</div>
                                         {% if item.is_bottleneck %}
                                         <span class="badge bg-warning text-dark" style="font-size: 0.75em;"><i class="fa-solid fa-triangle-exclamation me-1"></i>Crítica (Limitante)</span>
                                         {% endif %}
                                     </td>
-                                    <td class="text-end">{{ item.stock|smart_number }}</td>
+                                    <td class="text-end">{{ item.stock|floatformat:"-1" }}</td>
                                     <td class="text-end">
                                         {% if item.no_consumption %}
                                             <span class="text-muted small">sin consumo</span>
                                         {% else %}
-                                            {{ item.consumption_at_max|smart_number }}
+                                            <span class="{% if item.is_bottleneck %}text-danger fw-bold{% else %}text-primary{% endif %}" 
+                                                  data-bs-toggle="popover" 
+                                                  data-bs-trigger="hover focus" 
+                                                  data-bs-placement="top"
+                                                  title="Factores Computados"
+                                                  data-bs-content="{{ item.details_str }} | Total: {{ item.rate }} kg/h"
+                                                  style="cursor: help; text-decoration: underline dotted; text-underline-offset: 3px;">
+                                                {{ item.h_max|floatformat:"-1" }}
+                                            </span>
                                         {% endif %}
                                     </td>
                                     <td class="text-end">
                                         {% if item.no_consumption %}
-                                            <span class="text-muted">{{ item.stock|smart_number }}</span>
+                                            <span class="text-muted small">sin consumo</span>
+                                        {% else %}
+                                            {{ item.consumption_at_max|floatformat:"-1" }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        {% if item.no_consumption %}
+                                            <span class="text-muted">{{ item.stock|floatformat:"-1" }}</span>
                                         {% else %}
                                             <span class="{% if item.is_bottleneck %}text-danger fw-bold{% else %}text-success fw-bold{% endif %}">
-                                                {{ item.stock_remaining|smart_number }}
+                                                {{ item.stock_remaining|floatformat:"-1" }}
                                             </span>
                                         {% endif %}
                                     </td>
@@ -229,5 +249,33 @@ function filterCheckboxes(containerId, query) {
         }
     }
 }
+
+function toggleFilasInactivas(soloAfectadas) {
+    const filas = document.querySelectorAll('tr[data-inactiva="true"]');
+    filas.forEach(function(fila) {
+        fila.style.display = soloAfectadas ? 'none' : '';
+    });
+}
+
+// Aplicar estado inicial del toggle al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+    const toggle = document.getElementById('toggleInactivas');
+    if (toggle) {
+        toggleFilasInactivas(toggle.checked);
+    }
+});
 </script>
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+    var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+        return new bootstrap.Popover(popoverTriggerEl, {
+            container: 'body'
+        });
+    });
+});
+</script>
+{% endblock %}
 {% endblock %}

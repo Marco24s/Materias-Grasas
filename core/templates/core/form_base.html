@@ -22,3 +22,26 @@
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const containerSizeInput = document.getElementById('id_container_size');
+        const containerCountInput = document.getElementById('id_container_count');
+        const initialQuantityInput = document.getElementById('id_initial_quantity');
+
+        if (containerSizeInput && containerCountInput && initialQuantityInput) {
+            function updateQuantity() {
+                const size = parseFloat(containerSizeInput.value) || 0;
+                const count = parseInt(containerCountInput.value) || 0;
+                if (size > 0 && count > 0) {
+                    initialQuantityInput.value = (size * count).toFixed(2);
+                }
+            }
+
+            containerSizeInput.addEventListener('input', updateQuantity);
+            containerCountInput.addEventListener('input', updateQuantity);
+        }
+    });
+</script>
+{% endblock %}

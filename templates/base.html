@@ -6,20 +6,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Gestión de Materias Grasas Aeronáuticas{% endblock %}</title>
     
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap CSS (LOCAL) -->
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
     
-    <!-- FontAwesome Configura en un proyecto posterior para iconos -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- FontAwesome (LOCAL) -->
+    <link rel="stylesheet" href="{% static 'vendor/fontawesome/css/all.min.css' %}">
     
     <!-- Custom CSS -->
     <link href="{% static 'css/style.css' %}" rel="stylesheet">
+    {% block extra_css %}{% endblock %}
 </head>
 <body class="bg-light">
 
+    {% block navbar %}
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm mb-4">
         <div class="container">
-            <a class="navbar-brand d-flex align-items-center" href="/">
+            <a href="/" class="btn btn-sm text-white border-white me-3" style="border-radius: 50%; width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.1);" title="Volver al Portal">
+                <i class="fa-solid fa-arrow-left"></i>
+            </a>
+            <a class="navbar-brand d-flex align-items-center" href="{% url 'home' %}">
                 <i class="fa-solid fa-plane-departure me-2"></i> <!-- Ejemplo Icono Institucional -->
                 <strong>SGMG-COAN</strong>
             </a>
@@ -102,11 +107,26 @@
         </div>
     </nav>
 
-    <div class="container">
+    {% endblock navbar %}
+
+    <div class="container mt-2">
         {% if messages %}
             {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
-                    {{ message }}
+                <div class="alert-premium alert-premium-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
+                    <div class="alert-icon">
+                        {% if message.tags == 'success' %}
+                            <i class="fa-solid fa-circle-check"></i>
+                        {% elif message.tags == 'error' or message.tags == 'danger' %}
+                            <i class="fa-solid fa-circle-exclamation"></i>
+                        {% elif message.tags == 'warning' %}
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        {% else %}
+                            <i class="fa-solid fa-circle-info"></i>
+                        {% endif %}
+                    </div>
+                    <div class="alert-content">
+                        {{ message }}
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
             {% endfor %}
@@ -120,8 +140,8 @@
         <small>Sistema de Gestión de Materias Grasas Aeronáuticas - Comando de la Aviación Naval</small>
     </footer>
 
-    <!-- Bootstrap Bundle with Popper -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Bootstrap Bundle with Popper (LOCAL) -->
+    <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
     
     <!-- Script para búsqueda global y ordenamiento en tablas -->
     <script>
@@ -246,7 +266,66 @@
                     }
                 });
             });
+
+            // 3. Inicializar Tooltips de Bootstrap
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl)
+            })
+
+            // 4. Máscara de moneda en tiempo real (.currency-input)
+            const currencyInputs = document.querySelectorAll('.currency-input');
+            currencyInputs.forEach(input => {
+                // Función para aplicar el formato
+                const formatValue = (val) => {
+                    let cleanValue = val.toString().replace(/\D/g, "");
+                    if (cleanValue === "") return "";
+                    if (cleanValue.length < 3) cleanValue = cleanValue.padStart(3, "0");
+                    
+                    let integerPart = cleanValue.slice(0, -2);
+                    let decimalPart = cleanValue.slice(-2);
+                    
+                    integerPart = parseInt(integerPart).toString();
+                    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                    
+                    return integerPart + "," + decimalPart;
+                };
+
+                // Formatear valor inicial si existe
+                if (input.value) {
+                    // Si el valor viene del servidor con punto decimal, convertir a formato máscara
+                    if (input.value.includes('.') && !input.value.includes(',')) {
+                        input.value = formatValue(parseFloat(input.value).toFixed(2).replace('.', ''));
+                    }
+                }
+
+                input.addEventListener('input', function(e) {
+                    const start = this.selectionStart;
+                    const oldLen = this.value.length;
+                    
+                    this.value = formatValue(this.value);
+                    
+                    // Ajustar posición del cursor
+                    const newLen = this.value.length;
+                    this.setSelectionRange(start + (newLen - oldLen), start + (newLen - oldLen));
+                });
+
+                // Limpiar formato antes de enviar el formulario
+                const form = input.closest('form');
+                if (form && !form.dataset.currencyCleaned) {
+                    form.dataset.currencyCleaned = "true";
+                    form.addEventListener('submit', function() {
+                        const inputsToClean = form.querySelectorAll('.currency-input');
+                        inputsToClean.forEach(i => {
+                            // Quitar puntos y convertir coma en punto para que Django lo entienda como Decimal
+                            let raw = i.value.replace(/\./g, "").replace(",", ".");
+                            if (raw) i.value = raw;
+                        });
+                    });
+                }
+            });
         });
     </script>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

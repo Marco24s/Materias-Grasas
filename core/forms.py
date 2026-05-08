@@ -19,7 +19,7 @@ class AircraftModelForm(forms.ModelForm):
 class GreaseTypeForm(forms.ModelForm):
     class Meta:
         model = GreaseType
-        fields = ['nomenclatura', 'unidad', 'presentacion', 'nne_nsn', 'sibys', 'nato', 'normas_mil_otras', 'shelf_life_months', 'recertification_allowed', 'minimum_stock']
+        fields = ['nomenclatura', 'unidad', 'nne_nsn', 'sibys', 'nato', 'normas_mil_otras', 'shelf_life_months', 'recertification_allowed', 'minimum_stock']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -44,7 +44,10 @@ class AircraftGreaseForm(forms.ModelForm):
     class Meta:
         model = AircraftGrease
         fields = ['aircraft_model', 'grease_type', 'hourly_consumption_rate', 'notes']
-        
+        widgets = {
+            'hourly_consumption_rate': forms.NumberInput(attrs={'step': '0.001'}),
+        }
+                
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
@@ -101,7 +104,7 @@ class GreaseBatchForm(forms.ModelForm):
 
     class Meta:
         model = GreaseBatch
-        fields = ['grease_type', 'batch_number', 'manufacturing_date', 'expiration_date', 'initial_quantity', 'storage_location']
+        fields = ['grease_type', 'batch_number', 'manufacturing_date', 'expiration_date', 'container_size', 'container_count', 'initial_quantity', 'storage_location']
         widgets = {
             'manufacturing_date': forms.DateInput(attrs={'type': 'date'}),
             'expiration_date': forms.DateInput(attrs={'type': 'date'}),
@@ -110,6 +113,10 @@ class GreaseBatchForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
+        
+        # Make initial_quantity not required since it can be auto-calculated
+        self.fields['initial_quantity'].required = False
+        self.fields['initial_quantity'].help_text = "Se calcula automáticamente si ingresa cantidad por envase y cantidad de envases. O ingrese manualmente."
         
         # Populate choices dynamically from Unit models
         unit_choices = [(unit.name, unit.name) for unit in Unit.objects.all()]
@@ -140,13 +147,27 @@ class GreaseBatchForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        container_size = cleaned_data.get('container_size')
+        container_count = cleaned_data.get('container_count')
         initial_quantity = cleaned_data.get('initial_quantity')
         total_price = cleaned_data.get('total_price')
 
-        if initial_quantity and total_price is not None:
-            # We calculate unit_price which will be assigned to instance by the view or model save logic, 
-            # actually better to just inject it to the form's instance directly here.
-            self.instance.unit_price = total_price / initial_quantity
+        # Auto-calculate initial_quantity from container fields if both are provided
+        if container_size and container_count:
+            from decimal import Decimal
+            calculated_qty = container_size * Decimal(str(container_count))
+            if not initial_quantity:
+                cleaned_data['initial_quantity'] = calculated_qty
+                self.instance.initial_quantity = calculated_qty
+            # If user also typed initial_quantity, use their value (they know best)
+        
+        # Final validation: initial_quantity must be set somehow
+        final_qty = cleaned_data.get('initial_quantity')
+        if not final_qty:
+            self.add_error('initial_quantity', 'Debe ingresar la cantidad total, o completar cantidad por envase y cantidad de envases.')
+
+        if final_qty and total_price is not None:
+            self.instance.unit_price = total_price / final_qty
         return cleaned_data
 
 class ConsumeGreaseForm(forms.Form):
@@ -184,11 +205,11 @@ class GreaseReferencePriceForm(forms.ModelForm):
             pass
 
 class RetestBatchForm(forms.ModelForm):
-    extension_years = forms.FloatField(
+    new_expiration_date = forms.DateField(
         required=True,
-        min_value=0.1,
-        label="Años Habilitados",
-        help_text="Por cuántos años se extiende la habilitación (ej. '0.5' para medio año, '1.5', '2')."
+        label="Nueva Fecha de Vencimiento",
+        widget=forms.DateInput(attrs={'type': 'date'}),
+        help_text="Fecha de vencimiento otorgada por el laboratorio tras el retesteo."
     )
     reason = forms.CharField(
         widget=forms.Textarea(attrs={'rows': 3}), 
@@ -199,7 +220,7 @@ class RetestBatchForm(forms.ModelForm):
     
     class Meta:
         model = GreaseBatch
-        fields = ['extension_years', 'available_quantity', 'can_be_retested', 'reason']
+        fields = ['new_expiration_date', 'available_quantity', 'can_be_retested', 'reason']
         labels = {
             'can_be_retested': 'Puede volver a retestearse',
         }
@@ -207,6 +228,13 @@ class RetestBatchForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['available_quantity'].help_text = "Ajustar si la muestra para laboratorio consumió material."
+
+    def clean_new_expiration_date(self):
+        from datetime import date
+        new_date = self.cleaned_data['new_expiration_date']
+        if new_date <= date.today():
+            raise forms.ValidationError("La nueva fecha de vencimiento debe ser posterior a hoy.")
+        return new_date
 
 class ProcurementRequirementForm(forms.ModelForm):
     class Meta:

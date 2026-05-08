@@ -1,0 +1,98 @@
+{% extends "budget/base_budget.html" %}
+{% load l10n %}
+
+{% block budget_content %}
+<div class="row align-items-center mb-4">
+    <div class="col">
+        <h2 class="fw-bold"><i class="fa-solid fa-chart-pie text-success me-2"></i>Clasificación: {{ classification.name }}</h2>
+        <p class="text-muted mb-0">{{ classification.notes|default:"Esta vista muestra los totales agregados de todos los créditos bajo este grupo." }}</p>
+    </div>
+    <div class="col-auto">
+        <a href="{% url 'budget:classification_list' %}" class="btn btn-outline-secondary rounded-pill px-4 me-2">
+            <i class="fa-solid fa-arrow-left me-1"></i> Volver a Clasificaciones
+        </a>
+        <a href="{% url 'budget:classification_assign' classification.pk %}" class="btn btn-primary rounded-pill px-4">
+            <i class="fa-solid fa-list-check me-1"></i> Editar Asignaciones
+        </a>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card card-stats p-3 border-start border-4 border-secondary h-100 shadow-sm">
+            <div class="text-muted small text-uppercase mb-1">Techo Crédito Asignado</div>
+            <div class="h4 mb-0 fw-bold">${{ stats.total_assigned|floatformat:2 }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-stats p-3 border-start border-4 border-primary h-100 shadow-sm">
+            <div class="text-muted small text-uppercase mb-1">Distribuido a Unidades</div>
+            <div class="h4 mb-0 fw-bold text-primary">${{ stats.total_allocated|floatformat:2 }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-stats p-3 border-start border-4 border-warning h-100 shadow-sm">
+            <div class="text-muted small text-uppercase mb-1">Total Comprometido</div>
+            <div class="h4 mb-0 fw-bold text-warning">${{ stats.total_spent|floatformat:2 }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-stats p-3 border-start border-4 border-success h-100 shadow-sm">
+            <div class="text-muted small text-uppercase mb-1">Total Pagado</div>
+            <div class="h4 mb-0 fw-bold text-success">${{ stats.total_paid|floatformat:2 }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="card card-stats p-4">
+    <h5 class="fw-bold mb-4">Créditos Agrupados en esta Clasificación ({{ credit_details|length }})</h5>
+    
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="bg-light">
+                <tr class="small text-uppercase text-muted">
+                    <th>A.A.P.P. (Crédito Base)</th>
+                    <th class="text-end">Techo Base</th>
+                    <th class="text-end">Distribuido</th>
+                    <th class="text-end">Comprometido</th>
+                    <th class="text-end">Devengado</th>
+                    <th class="text-end">Pagado</th>
+                    <th class="text-center">Ejecución (%)</th>
+                </tr>
+            </thead>
+            <tbody class="border-top-0">
+                {% for item in credit_details %}
+                <tr>
+                    <td class="fw-bold">
+                        <a href="{% url 'budget:credit_detail' item.credit.pk %}" class="text-decoration-none">
+                            {{ item.credit }}
+                        </a>
+                    </td>
+                    <td class="text-end">${{ item.credit.total_amount|localize }}</td>
+                    <td class="text-end text-primary">${{ item.allocated|localize }}</td>
+                    <td class="text-end text-warning">${{ item.spent|localize }}</td>
+                    <td class="text-end text-info">${{ item.accrued|localize }}</td>
+                    <td class="text-end text-success">${{ item.paid|localize }}</td>
+                    <td class="text-center align-middle">
+                        {% if item.allocated > 0 %}
+                            {% widthratio item.spent item.allocated 100 as execution_percent %}
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-warning" role="progressbar" style="width: {{ execution_percent }}%" title="{{ execution_percent }}% Comprometido"></div>
+                            </div>
+                        {% else %}
+                            <span class="text-muted small">0%</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-muted">
+                        No hay créditos asignados a esta clasificación. Usa el botón "Editar Asignaciones".
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

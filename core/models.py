@@ -50,7 +50,6 @@ class AircraftModel(models.Model):
 
 class GreaseType(models.Model):
     unidad = models.CharField(max_length=50, verbose_name="UNIDAD")
-    presentacion = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="PRESENTACIÓN")
     nomenclatura = models.CharField(max_length=150, verbose_name="NOMENCLATURA")
     nne_nsn = models.CharField(max_length=100, verbose_name="N.N.E. / N.S.N.", blank=True, null=True)
     sibys = models.CharField(max_length=100, verbose_name="SIBYS", blank=True, null=True)
@@ -64,10 +63,9 @@ class GreaseType(models.Model):
     class Meta:
         verbose_name = "Tipo de Grasa / Aceite"
         verbose_name_plural = "Tipos de Grasas / Aceites"
-        unique_together = ('nomenclatura', 'presentacion', 'normas_mil_otras')
 
     def __str__(self):
-        return f"{self.nomenclatura} ({self.presentacion} {self.unidad})"
+        return f"{self.nomenclatura} ({self.unidad})"
 
     def get_average_unit_price(self):
         """Calcula el costo promedio por unidad (1Kg o 1L) basado en los precios de referencia."""
@@ -125,14 +123,75 @@ class FlightPlan(models.Model):
         return f"Plan {self.get_period_type_display()} - {self.aircraft_model.name} ({self.planned_hours} hs)"
 
     def get_projected_consumption(self):
-        """Calcula el consumo proyectado para este plan basado en las tasas de consumo."""
+        """
+        Calcula el consumo proyectado y realiza un análisis detallado de stock seguro 
+        y en riesgo (vencimientos) para la unidad de la aeronave.
+        """
+        from django.db.models import Sum, Min
         consumptions = []
+        unit_name = self.aircraft_model.unit.name
+        start_date = self.period_start_date
+        end_date = self.period_end_date or self.period_start_date
+        
         for assoc in self.aircraft_model.grease_associations.all():
+            projected = assoc.hourly_consumption_rate * self.planned_hours
+            
+            # 1. Todo el stock físico disponible hoy en la unidad
+            unit_batches = assoc.grease_type.batches.available().filter(
+                storage_location=unit_name
+            )
+            
+            total_physical_stock = unit_batches.aggregate(total=Sum('available_quantity'))['total'] or 0
+            
+            # 2. Stock Seguro (Vence después del fin del plan)
+            safe_stock = unit_batches.filter(
+                expiration_date__gte=end_date
+            ).aggregate(total=Sum('available_quantity'))['total'] or 0
+            
+            # 3. Stock en Riesgo (Vence durante el periodo del plan)
+            expiring_batches = unit_batches.filter(
+                expiration_date__gte=start_date,
+                expiration_date__lt=end_date
+            ).order_by('expiration_date')
+            
+            expiring_info = []
+            for b in expiring_batches:
+                expiring_info.append({
+                    'amount': b.available_quantity,
+                    'date': b.expiration_date
+                })
+
+            # 4. Próximo vencimiento (el más cercano de todos los lotes disponibles)
+            next_expiry = unit_batches.aggregate(earliest=Min('expiration_date'))['earliest']
+            
             consumptions.append({
                 'grease_type': assoc.grease_type,
-                'projected_amount': assoc.hourly_consumption_rate * self.planned_hours
+                'projected_amount': projected,
+                'safe_stock': safe_stock,
+                'total_physical_stock': total_physical_stock,
+                'expiring_info': expiring_info,
+                'next_expiry': next_expiry,
+                'insufficient_stock': projected > safe_stock
             })
         return consumptions
+
+class GreaseBatchQuerySet(models.QuerySet):
+    def available(self):
+        """Retorna solo las casamatas utilizables para el consumo."""
+        return self.filter(status__in=['SERVICEABLE', 'NEAR_EXPIRATION'])
+        
+    def active(self):
+        """Retorna casamatas actuales (no mandadas al archivo muerto)."""
+        return self.filter(is_archived=False)
+        
+    def archived(self):
+        """Retorna el historial histórico."""
+        return self.filter(is_archived=True)
+        
+    def available_with_stock(self):
+        """Retorna casamatas utilizables y con stock real positivo."""
+        return self.available().filter(available_quantity__gt=0)
+
 
 class GreaseBatch(models.Model):
     STATUS_CHOICES = [
@@ -142,11 +201,15 @@ class GreaseBatch(models.Model):
         ('PENDING_RETEST', 'Retesteando...'),
     ]
 
+    objects = GreaseBatchQuerySet.as_manager()
+
     grease_type = models.ForeignKey(GreaseType, on_delete=models.CASCADE, related_name="batches", verbose_name="Tipo de Grasa")
     batch_number = models.CharField(max_length=100, verbose_name="Número de Lote")
     manufacturing_date = models.DateField(verbose_name="Fecha de Fabricación")
     expiration_date = models.DateField(verbose_name="Fecha de Vencimiento")
-    initial_quantity = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Cantidad Inicial")
+    container_size = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="Cantidad por Envase", help_text="Ej: 5 para un envase de 5 Kg")
+    container_count = models.PositiveIntegerField(null=True, blank=True, verbose_name="Cantidad de Envases", help_text="Número de envases/latas en este lote")
+    initial_quantity = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Cantidad Total Inicial")
     available_quantity = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Cantidad Disponible")
     unit_price = models.DecimalField(max_digits=14, decimal_places=6, verbose_name="Costo Unitario Real ($)", blank=True, null=True, help_text="Costo real calculado por unidad (Kg/L).")
     storage_location = models.CharField(max_length=100, verbose_name="Ubicación (Almacén/Unidad)")
