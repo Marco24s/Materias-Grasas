@@ -183,6 +183,9 @@
             <a href="{% url 'budget:compensacion_create' %}?source_credit={{ credit.id }}" class="btn btn-outline-warning rounded-pill py-2 shadow-sm">
                 <i class="fa-solid fa-money-bill-transfer me-2"></i>Cambio de Inciso
             </a>
+            <a href="{% url 'budget:credit_adjust' credit.id %}" class="btn btn-outline-info rounded-pill py-2 shadow-sm">
+                <i class="fa-solid fa-pen-to-square me-2"></i>Ajustar Montos
+            </a>
         </div>
         {% endif %}
     </div>
@@ -269,6 +272,87 @@
         </table>
     </div>
 </div>
+
+<!-- Historial de Ajustes -->
+{% if adjustments %}
+<div class="card card-stats p-4 mt-4 animate__animated animate__fadeInUp">
+    <h5 class="fw-bold mb-4 d-flex align-items-center">
+        <i class="fa-solid fa-clock-rotate-left text-info me-2"></i>
+        Historial de Modificaciones Presupuestarias
+    </h5>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+            <thead class="bg-light">
+                <tr class="small text-uppercase text-muted">
+                    <th>Fecha</th>
+                    <th>Usuario</th>
+                    <th>Ajuste (Antes &rarr; Después)</th>
+                    <th>Motivo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for adj in adjustments %}
+                <tr>
+                    <td class="small">{{ adj.timestamp|date:"d/m/Y H:i" }}</td>
+                    <td class="small fw-bold">{{ adj.user.get_full_name|default:adj.user.username }}</td>
+                    <td class="small">
+                        <div class="row g-2" style="min-width: 400px;">
+                            {% if adj.q1_old != adj.q1_new %}
+                            <div class="col-12 border-bottom pb-1">
+                                <span class="badge bg-secondary me-1">T1</span>
+                                <span class="text-muted">${{ adj.q1_old|localize }}</span> &rarr; 
+                                <span class="fw-bold text-dark">${{ adj.q1_new|localize }}</span>
+                                <span class="ms-2 fw-bold {% if adj.q1_new > adj.q1_old %}text-success{% else %}text-danger{% endif %}">
+                                    ({% if adj.q1_new > adj.q1_old %}+{% endif %}{{ adj.get_q1_delta|localize }})
+                                </span>
+                            </div>
+                            {% endif %}
+                            {% if adj.q2_old != adj.q2_new %}
+                            <div class="col-12 border-bottom pb-1">
+                                <span class="badge bg-secondary me-1">T2</span>
+                                <span class="text-muted">${{ adj.q2_old|localize }}</span> &rarr; 
+                                <span class="fw-bold text-dark">${{ adj.q2_new|localize }}</span>
+                                <span class="ms-2 fw-bold {% if adj.q2_new > adj.q2_old %}text-success{% else %}text-danger{% endif %}">
+                                    ({% if adj.q2_new > adj.q2_old %}+{% endif %}{{ adj.get_q2_delta|localize }})
+                                </span>
+                            </div>
+                            {% endif %}
+                            {% if adj.q3_old != adj.q3_new %}
+                            <div class="col-12 border-bottom pb-1">
+                                <span class="badge bg-secondary me-1">T3</span>
+                                <span class="text-muted">${{ adj.q3_old|localize }}</span> &rarr; 
+                                <span class="fw-bold text-dark">${{ adj.q3_new|localize }}</span>
+                                <span class="ms-2 fw-bold {% if adj.q3_new > adj.q3_old %}text-success{% else %}text-danger{% endif %}">
+                                    ({% if adj.q3_new > adj.q3_old %}+{% endif %}{{ adj.get_q3_delta|localize }})
+                                </span>
+                            </div>
+                            {% endif %}
+                            {% if adj.q4_old != adj.q4_new %}
+                            <div class="col-12">
+                                <span class="badge bg-secondary me-1">T4</span>
+                                <span class="text-muted">${{ adj.q4_old|localize }}</span> &rarr; 
+                                <span class="fw-bold text-dark">${{ adj.q4_new|localize }}</span>
+                                <span class="ms-2 fw-bold {% if adj.q4_new > adj.q4_old %}text-success{% else %}text-danger{% endif %}">
+                                    ({% if adj.q4_new > adj.q4_old %}+{% endif %}{{ adj.get_q4_delta|localize }})
+                                </span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if adj.q1_old == adj.q1_new and adj.q2_old == adj.q2_new and adj.q3_old == adj.q3_new and adj.q4_old == adj.q4_new %}
+                            <div class="col-12 text-muted italic">
+                                Sin cambios en los montos trimestrales.
+                            </div>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="small italic text-muted">{{ adj.reason }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}

@@ -312,3 +312,38 @@ class BudgetCreditTypeLog(models.Model):
 
     def __str__(self):
         return f"{self.get_action_display()} — {self.credit} ({self.timestamp.strftime('%d/%m/%Y %H:%M')})"
+
+
+class BudgetCreditAdjustment(models.Model):
+    credit = models.ForeignKey(BudgetCredit, on_delete=models.CASCADE, related_name='adjustments', verbose_name="Crédito")
+    
+    q1_old = models.DecimalField(max_digits=18, decimal_places=2)
+    q2_old = models.DecimalField(max_digits=18, decimal_places=2)
+    q3_old = models.DecimalField(max_digits=18, decimal_places=2)
+    q4_old = models.DecimalField(max_digits=18, decimal_places=2)
+    
+    q1_new = models.DecimalField(max_digits=18, decimal_places=2)
+    q2_new = models.DecimalField(max_digits=18, decimal_places=2)
+    q3_new = models.DecimalField(max_digits=18, decimal_places=2)
+    q4_new = models.DecimalField(max_digits=18, decimal_places=2)
+    
+    reason = models.TextField(verbose_name="Motivo del Ajuste")
+    user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, verbose_name="Realizado por")
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="Fecha y Hora")
+
+    class Meta:
+        verbose_name = "Ajuste de Crédito"
+        verbose_name_plural = "Ajustes de Crédito"
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"Ajuste #{self.id} - {self.credit}"
+
+    @property
+    def get_q1_delta(self): return self.q1_new - self.q1_old
+    @property
+    def get_q2_delta(self): return self.q2_new - self.q2_old
+    @property
+    def get_q3_delta(self): return self.q3_new - self.q3_old
+    @property
+    def get_q4_delta(self): return self.q4_new - self.q4_old

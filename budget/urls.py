@@ -18,6 +18,7 @@ urlpatterns = [
     path('credits/type-log/', views.credit_type_log, name='credit_type_log'),
     path('credits/<int:pk>/unassign-type/', views.credit_unassign_type, name='credit_unassign_type'),
     path('credits/<int:pk>/detail/', views.credit_detail, name='credit_detail'),
+    path('credits/<int:pk>/adjust/', views.credit_adjust, name='credit_adjust'),
     path('credits/<int:pk>/delete/', views.credit_delete, name='credit_delete'),
     path('credits/bulk-delete/', views.credit_bulk_delete, name='credit_bulk_delete'),
     

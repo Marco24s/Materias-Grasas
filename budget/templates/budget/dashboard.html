@@ -40,10 +40,11 @@
     .transition-icon {
         transition: transform 0.3s ease;
     }
-    .unit-row[aria-expanded="true"] .transition-icon {
-        transform: rotate(90deg);
+    .unit-row[aria-expanded="true"] .transition-icon,
+    [data-bs-toggle="collapse"][aria-expanded="true"] .transition-icon {
+        transform: rotate(180deg);
     }
-    .unit-row:hover {
+    .unit-row:hover, [data-bs-toggle="collapse"]:hover {
         background-color: rgba(25, 135, 84, 0.02) !important;
     }
     .distrib-btn {
@@ -74,26 +75,40 @@
                     {% if stats.credit_by_type %}
                     <hr class="my-2 opacity-25">
                     <div class="small">
+                        <div class="text-uppercase text-muted fw-bold mb-3 small" style="letter-spacing: 0.5px;">Resumen por Tipo de Crédito</div>
                         {% for row in stats.credit_by_type %}
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <span class="text-muted">
-                                <i class="fa-solid fa-tag fa-xs me-1 text-primary opacity-50"></i>
-                                {{ row.credit_type__name }}
-                            </span>
-                            <span class="fw-bold">${{ row.subtotal|floatformat:2 }}</span>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1" style="cursor: pointer;" data-bs-toggle="collapse" data-bs-target="#type-breakdown-{{ forloop.counter }}">
+                                <span class="fw-bold text-dark">
+                                    <span class="badge {% if 'ASIGN' in row.name|upper %}bg-primary{% elif 'REFUERZO' in row.name|upper %}bg-warning{% else %}bg-secondary{% endif %} me-2" style="font-size: 0.7rem; vertical-align: middle;">{{ row.name|upper }}</span>
+                                    <span class="text-muted" style="font-size: 0.85rem;">{{ row.name }}</span>
+                                    <i class="fa-solid fa-chevron-down ms-1 small opacity-50 transition-icon" style="font-size: 0.7rem;"></i>
+                                </span>
+                                <span class="fw-bold text-dark" style="font-size: 1rem;">${{ row.total|localize }}</span>
+                            </div>
+                            
+                            <!-- Desglose por SUBPC (Colapsable) -->
+                            <div class="collapse" id="type-breakdown-{{ forloop.counter }}">
+                                <div class="ms-2 ps-3 border-start border-2 mt-2" style="border-color: rgba(0,0,0,0.05) !important;">
+                                    {% for sub in row.subpcs %}
+                                    <div class="d-flex justify-content-between align-items-center py-1">
+                                        <span class="text-muted small">
+                                            <i class="fa-solid fa-caret-right me-1 opacity-50" style="font-size: 0.7rem;"></i> 
+                                            SUBPC <strong>{{ sub.code }}</strong>
+                                        </span>
+                                        <span class="text-muted small fw-bold">${{ sub.amount|localize }}</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            {% if stats.total_credit > 0 %}
+                            <div class="progress mt-2" style="height: 3px; background-color: rgba(0,0,0,0.05);">
+                                <div class="progress-bar {% if 'ASIGN' in row.name|upper %}bg-primary{% else %}bg-warning{% endif %}" style="width: {% widthratio row.total stats.total_credit 100 %}%"></div>
+                            </div>
+                            {% endif %}
                         </div>
-                        {% if stats.total_credit > 0 %}
-                        <div class="progress mb-2" style="height: 3px;">
-                            <div class="progress-bar bg-primary" style="width: {% widthratio row.subtotal stats.total_credit 100 %}%"></div>
-                        </div>
-                        {% endif %}
                         {% endfor %}
-                        {% if stats.credit_by_type|length > 1 %}
-                        <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
-                            <span class="fw-bold text-muted">TOTAL:</span>
-                            <span class="fw-bold text-primary">${{ stats.total_credit|floatformat:2 }}</span>
-                        </div>
-                        {% endif %}
                     </div>
                     {% endif %}
                 </div>
@@ -120,6 +135,26 @@
                     {% else %}
                     <div class="progress mt-2" style="height: 6px;">
                         <div class="progress-bar bg-success" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    {% endif %}
+
+                    {% if stats.allocated_by_subpc %}
+                    <div class="mt-3 pt-2 border-top">
+                        <div class="d-flex justify-content-between align-items-center mb-2" style="cursor: pointer;" data-bs-toggle="collapse" data-bs-target="#distrib-subpc-collapse">
+                            <span class="small fw-bold text-success text-uppercase" style="letter-spacing: 0.5px;">Desglose por SUBPC</span>
+                            <i class="fa-solid fa-chevron-down small text-success transition-icon"></i>
+                        </div>
+                        <div class="collapse" id="distrib-subpc-collapse">
+                            {% for row in stats.allocated_by_subpc %}
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small text-muted">
+                                    <i class="fa-solid fa-caret-right me-1 opacity-50"></i>
+                                    SUBPC {{ row.credit__pre_inc__code }}
+                                </span>
+                                <span class="small fw-bold">${{ row.subtotal|localize }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
                     </div>
                     {% endif %}
                 </div>

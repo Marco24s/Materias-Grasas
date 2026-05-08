@@ -296,3 +296,25 @@ class BudgetCompensacionForm(forms.ModelForm):
         self.fields['source_credit'].queryset = BudgetCredit.objects.filter(total_amount__gt=0).order_by('programa__code', 'ff__code')
         self.fields['source_credit'].label = "Crédito de Origen (AA.PP.)"
         self.fields['programa'].help_text = "La compensación solo se permite entre partidas del mismo programa."
+
+
+class BudgetCreditAdjustmentForm(forms.Form):
+    q1_new = forms.DecimalField(max_digits=18, decimal_places=2, label="Nuevo Monto T1", required=False, localize=True)
+    q2_new = forms.DecimalField(max_digits=18, decimal_places=2, label="Nuevo Monto T2", required=False, localize=True)
+    q3_new = forms.DecimalField(max_digits=18, decimal_places=2, label="Nuevo Monto T3", required=False, localize=True)
+    q4_new = forms.DecimalField(max_digits=18, decimal_places=2, label="Nuevo Monto T4", required=False, localize=True)
+    reason = forms.CharField(widget=forms.Textarea(attrs={'rows': 3}), label="Motivo del Ajuste", help_text="Explique brevemente por qué se realiza esta modificación.")
+
+    def __init__(self, *args, **kwargs):
+        credit = kwargs.pop('credit', None)
+        super().__init__(*args, **kwargs)
+        if credit:
+            self.fields['q1_new'].initial = credit.q1_amount
+            self.fields['q2_new'].initial = credit.q2_amount
+            self.fields['q3_new'].initial = credit.q3_amount
+            self.fields['q4_new'].initial = credit.q4_amount
+        
+        for field in ['q1_new', 'q2_new', 'q3_new', 'q4_new']:
+            # No sobreescribir la clase si ya tiene format-control del bootstrap
+            self.fields[field].widget.attrs.update({'class': 'form-control currency-input', 'placeholder': '0,00'})
+        self.fields['reason'].widget.attrs.update({'class': 'form-control'})

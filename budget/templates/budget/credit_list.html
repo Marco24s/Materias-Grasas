@@ -148,6 +148,15 @@
     .z-index-1000 { z-index: 1000; }
     .credit-row.selected { background-color: rgba(13, 110, 253, 0.05); }
     #bulk-actions-bar { transition: all 0.3s ease; }
+    .transition-icon {
+        transition: transform 0.3s ease;
+    }
+    [data-bs-toggle="collapse"][aria-expanded="true"] .transition-icon {
+        transform: rotate(180deg);
+    }
+    [data-bs-toggle="collapse"]:hover {
+        background-color: rgba(0, 0, 0, 0.02) !important;
+    }
 </style>
 
 <script>
@@ -244,33 +253,71 @@ document.addEventListener('DOMContentLoaded', function() {
                 <h6 class="fw-bold mb-3 text-primary"><i class="fa-solid fa-chart-pie me-2"></i>Resumen por Tipo de Crédito</h6>
                 {% if credit_by_type or unassigned_total %}
                     {% for row in credit_by_type %}
-                        <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
-                            <span class="text-muted"><span class="badge {{ row.credit_type__code|credit_type_badge_color }} me-2" style="color: white;">{{ row.credit_type__code }}</span> {{ row.credit_type__name }}</span>
-                            <span class="fw-bold text-dark">${{ row.subtotal|floatformat:2 }}</span>
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-1" style="cursor: pointer;" data-bs-toggle="collapse" data-bs-target="#type-list-{{ forloop.counter }}">
+                                <span class="fw-bold text-dark">
+                                    <span class="badge {{ row.code|credit_type_badge_color }} px-2 py-1 me-2" style="color: white; font-size: 0.75rem;">{{ row.code }}</span>
+                                    {% if row.code|upper != row.name|upper %}
+                                        <span class="text-muted small">{{ row.name }}</span>
+                                    {% endif %}
+                                    <i class="fa-solid fa-chevron-down ms-1 small opacity-50 transition-icon" style="font-size: 0.7rem;"></i>
+                                </span>
+                                <div class="text-end">
+                                    <span class="fw-bold text-dark" style="font-size: 1.1rem;">${{ row.total_dist|floatformat:2 }}</span>
+                                    {% if is_admin %}
+                                        <div class="small text-muted" style="font-size: 0.7rem;">Techo AA.PP: ${{ row.total_aapp|floatformat:2 }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="collapse" id="type-list-{{ forloop.counter }}">
+                                <div class="ms-2 ps-3 border-start border-2 mt-2" style="border-color: rgba(0,0,0,0.05) !important;">
+                                    {% for sub in row.subpcs %}
+                                    <div class="mb-2">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span class="small text-dark fw-bold">SUBPC {{ sub.code }}</span>
+                                            <span class="small fw-bold text-primary">${{ sub.amount_dist|floatformat:2 }}</span>
+                                        </div>
+                                        {% if is_admin %}
+                                        <div class="d-flex justify-content-between small text-muted" style="font-size: 0.7rem;">
+                                            <span>Techo: ${{ sub.amount_aapp|floatformat:2 }}</span>
+                                            <span>Saldo: ${{ sub.available|floatformat:2 }}</span>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
                         </div>
                     {% endfor %}
                     {% if unassigned_total > 0 %}
-                        <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
-                            <span class="text-muted"><span class="badge bg-secondary-subtle text-secondary me-2">—</span> Sin Asignar</span>
+                        <div class="d-flex justify-content-between align-items-center pt-2 mt-2 border-top">
+                            <span class="text-muted">
+                                <span class="badge bg-secondary-subtle text-secondary me-2">—</span> 
+                                Sin Asignar / Otros
+                            </span>
                             <span class="fw-bold text-dark">${{ unassigned_total|floatformat:2 }}</span>
                         </div>
                     {% endif %}
                 {% else %}
-                    <p class="small text-muted mb-0">No hay créditos registrados.</p>
+                    <p class="small text-muted mb-0 text-center py-3">No hay créditos registrados.</p>
                 {% endif %}
             </div>
         </div>
     </div>
     
     <div class="col-md-6 mb-3">
-        <div class="alert alert-info border-0 shadow-sm h-100 d-flex align-items-center m-0">
-            <i class="fa-solid fa-circle-info fa-2x me-3 opacity-50"></i>
-            <div>
-                <h6 class="fw-bold mb-1">Información Presupuestaria</h6>
-                <p class="small mb-0 opacity-75">
-                    Cada línea representa una asignación específica. La combinación de FF, Subprograma, Programa, Inciso y Partida Parcial debe ser única según el Clasificador del Gasto.
-                </p>
+        <div class="alert alert-info border-0 shadow-sm h-100 d-flex flex-column justify-content-center m-0 py-4">
+            <div class="d-flex align-items-center mb-3">
+                <i class="fa-solid fa-circle-info fa-2x me-3 opacity-50"></i>
+                <h6 class="fw-bold mb-0">Ayuda sobre Montos</h6>
             </div>
+            <p class="small mb-2 text-dark">
+                <strong>Monto AA.PP. (Techo):</strong> Es el crédito total que la institución recibió del presupuesto nacional.
+            </p>
+            <p class="small mb-0 text-dark">
+                <strong>Monto Distribuido (Real):</strong> Es la suma de los créditos que ya fueron repartidos a las Unidades de gasto.
+            </p>
         </div>
     </div>
 </div>

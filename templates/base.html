@@ -285,61 +285,59 @@
             // 4. Máscara de moneda en tiempo real (.currency-input)
             const currencyInputs = document.querySelectorAll('.currency-input');
             currencyInputs.forEach(input => {
-                // Función para aplicar el formato
                 const formatValue = (val) => {
-                    let cleaned = val.toString().replace(/[^0-9,]/g, '');
+                    if (val === null || val === undefined) return '';
+                    let str = val.toString().trim();
+                    if (str === '') return '';
+
+                    // Si es un valor puramente numérico con punto decimal (ej: 1234.56 de Django)
+                    // y no tiene comas, lo convertimos a formato coma decimal primero
+                    if (/^\d+\.\d{1,2}$/.test(str)) {
+                        str = str.replace('.', ',');
+                    }
+
+                    let cleaned = str.replace(/[^0-9,]/g, '');
                     if (cleaned === '') return '';
 
-                    // Permitir ingreso directo de números y coma decimal
                     const parts = cleaned.split(',');
                     let integerPart = parts[0].replace(/^0+(?=\d)/, '');
                     if (integerPart === '') integerPart = '0';
                     let decimalPart = parts.length > 1 ? ',' + parts[1].substring(0, 2) : '';
 
+                    // Separador de miles: punto
                     integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
                     return integerPart + decimalPart;
                 };
 
-                // Formatear valor inicial si existe
+                // Formatear valor inicial
                 if (input.value) {
-                    let value = input.value;
-                    if (value.includes('.') && !value.includes(',')) {
-                        value = parseFloat(value.replace(/\./g, '').replace(',', '.'));
-                        if (!isNaN(value)) {
-                            input.value = formatValue(value.toFixed(2).replace('.', ','));
-                        }
-                    } else {
-                        input.value = formatValue(value);
-                    }
+                    input.value = formatValue(input.value);
                 }
 
                 input.addEventListener('focus', function() {
-                    if (this.value === '0,00') {
-                        this.value = '';
-                    }
-                    this.select();
+                    if (this.value === '0,00') this.value = '';
+                    setTimeout(() => this.select(), 10);
                 });
 
                 input.addEventListener('input', function(e) {
                     const start = this.selectionStart;
-                    const oldLen = this.value.length;
-
-                    this.value = formatValue(this.value);
-
-                    // Ajustar posición del cursor
-                    const newLen = this.value.length;
-                    const cursor = Math.max(0, start + (newLen - oldLen));
-                    this.setSelectionRange(cursor, cursor);
+                    const oldVal = this.value;
+                    const formatted = formatValue(oldVal);
+                    
+                    if (formatted !== oldVal) {
+                        this.value = formatted;
+                        // Ajuste inteligente del cursor
+                        const diff = formatted.length - oldVal.length;
+                        const newCursor = Math.max(0, start + diff);
+                        this.setSelectionRange(newCursor, newCursor);
+                    }
                 });
 
-                // Limpiar formato antes de enviar el formulario
                 const form = input.closest('form');
                 if (form && !form.dataset.currencyCleaned) {
                     form.dataset.currencyCleaned = "true";
                     form.addEventListener('submit', function() {
-                        const inputsToClean = form.querySelectorAll('.currency-input');
-                        inputsToClean.forEach(i => {
-                            // Quitar puntos y convertir coma en punto para que Django lo entienda como Decimal
+                        form.querySelectorAll('.currency-input').forEach(i => {
                             let raw = i.value.replace(/\./g, "").replace(",", ".");
                             if (raw) i.value = raw;
                         });

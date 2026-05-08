@@ -374,3 +374,60 @@ def execute_compensacion(compensacion_id, user):
     comp.save()
     
     return comp
+
+
+@transaction.atomic
+def adjust_credit(credit_id, q1_new, q2_new, q3_new, q4_new, reason, user):
+    """
+    Ajusta los montos de un crédito existente y registra la modificación.
+    Valida que los nuevos montos no sean inferiores a lo ya distribuido.
+    """
+    from .models import BudgetCredit, BudgetCreditAdjustment
+    from django.db.models import Sum
+    
+    credit = BudgetCredit.objects.select_for_update().get(pk=credit_id)
+    
+    if credit.fiscal_year.status == 'CLOSED':
+        raise ValidationError("No se puede ajustar crédito en un ejercicio cerrado.")
+
+    # Validar contra distribuciones existentes
+    allocs = credit.allocations.aggregate(
+        q1=Sum('q1_amount'), q2=Sum('q2_amount'), 
+        q3=Sum('q3_amount'), q4=Sum('q4_amount')
+    )
+    q1_a = allocs['q1'] or 0
+    q2_a = allocs['q2'] or 0
+    q3_a = allocs['q3'] or 0
+    q4_a = allocs['q4'] or 0
+
+    # Si el usuario no envió un monto (campo vacío), mantenemos el actual
+    q1_new = q1_new if q1_new is not None else credit.q1_amount
+    q2_new = q2_new if q2_new is not None else credit.q2_amount
+    q3_new = q3_new if q3_new is not None else credit.q3_amount
+    q4_new = q4_new if q4_new is not None else credit.q4_amount
+
+    if q1_new < q1_a: raise ValidationError(f"T1: El nuevo monto (${q1_new}) es inferior a lo ya distribuido (${q1_a}).")
+    if q2_new < q2_a: raise ValidationError(f"T2: El nuevo monto (${q2_new}) es inferior a lo ya distribuido (${q2_a}).")
+    if q3_new < q3_a: raise ValidationError(f"T3: El nuevo monto (${q3_new}) es inferior a lo ya distribuido (${q3_a}).")
+    if q4_new < q4_a: raise ValidationError(f"T4: El nuevo monto (${q4_new}) es inferior a lo ya distribuido (${q4_a}).")
+
+    # Guardar estado anterior
+    adj = BudgetCreditAdjustment(
+        credit=credit,
+        q1_old=credit.q1_amount, q2_old=credit.q2_amount,
+        q3_old=credit.q3_amount, q4_old=credit.q4_amount,
+        q1_new=q1_new, q2_new=q2_new,
+        q3_new=q3_new, q4_new=q4_new,
+        reason=reason,
+        user=user
+    )
+
+    # Actualizar crédito
+    credit.q1_amount = q1_new
+    credit.q2_amount = q2_new
+    credit.q3_amount = q3_new
+    credit.q4_amount = q4_new
+    credit.save()
+    
+    adj.save()
+    return credit, adj

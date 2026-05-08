@@ -19,7 +19,8 @@ from .forms import (
     BudgetExecutionPaymentForm, BudgetClassificationForm, BudgetClassificationAssignForm,
     BudgetCompensacionForm, BudgetFFForm, BudgetSubprogForm, BudgetProgForm,
     BudgetPPPIncForm, BudgetPPIncForm, BudgetPreIncForm,
-    BudgetIncisosAgrupadoForm, BudgetIncForm, BudgetCreditTypeForm
+    BudgetIncisosAgrupadoForm, BudgetIncForm, BudgetCreditTypeForm,
+    BudgetCreditAdjustmentForm
 )
 from . import services
 
@@ -175,20 +176,55 @@ def dashboard(request):
         stats['q3_seg'] = (q3_t / total_q * 100) if total_q > 0 else 0
         stats['q4_seg'] = (q4_t / total_q * 100) if total_q > 0 else 0
 
-        # Desglose por Tipo de Crédito
+        # Desglose por Tipo de Crédito y SUBPC
         if is_admin_user:
-            stats['credit_by_type'] = (
+            raw_stats = (
                 credits.filter(credit_type__isnull=False)
-                .values('credit_type__name', 'credit_type__code')
+                .values('credit_type__name', 'credit_type__code', 'pre_inc__code')
                 .annotate(subtotal=Sum('total_amount'))
-                .order_by('credit_type__code')
+                .order_by('credit_type__code', 'pre_inc__code')
             )
         else:
-            stats['credit_by_type'] = (
+            raw_stats = (
                 credits.filter(credit_type__isnull=False)
-                .values('credit_type__name', 'credit_type__code')
+                .values('credit_type__name', 'credit_type__code', 'pre_inc__code')
                 .annotate(subtotal=Sum('allocations__allocated_amount', filter=Q(allocations__unit=request.user.unit)))
-                .order_by('credit_type__code')
+                .order_by('credit_type__code', 'pre_inc__code')
+            )
+
+        # Agrupar en Python para facilitar el renderizado
+        grouped_stats = {}
+        for item in raw_stats:
+            code = item['credit_type__code']
+            if code not in grouped_stats:
+                grouped_stats[code] = {
+                    'name': item['credit_type__name'],
+                    'total': 0,
+                    'subpcs': []
+                }
+            grouped_stats[code]['total'] += item['subtotal'] or 0
+            if item['subtotal'] and item['subtotal'] > 0:
+                grouped_stats[code]['subpcs'].append({
+                    'code': item['pre_inc__code'] or 'S/D',
+                    'amount': item['subtotal']
+                })
+        
+        stats['credit_by_type'] = grouped_stats.values()
+
+        # Desglose de Crédito Distribuido por SUBPC
+        if is_admin_user:
+            stats['allocated_by_subpc'] = (
+                BudgetAllocation.objects.filter(credit__fiscal_year=fiscal_year)
+                .values('credit__pre_inc__code')
+                .annotate(subtotal=Sum('allocated_amount'))
+                .order_by('credit__pre_inc__code')
+            )
+        else:
+            stats['allocated_by_subpc'] = (
+                BudgetAllocation.objects.filter(credit__fiscal_year=fiscal_year, unit=request.user.unit)
+                .values('credit__pre_inc__code')
+                .annotate(subtotal=Sum('allocated_amount'))
+                .order_by('credit__pre_inc__code')
             )
 
     return render(request, 'budget/dashboard.html', {'fiscal_year': fiscal_year, 'stats': stats, 'unit_report': unit_report, 'is_admin': is_admin_user})
@@ -238,6 +274,7 @@ def fiscal_year_close(request, pk):
 def credit_list(request):
     from django.db.models import Sum, Q
     is_admin_user = is_admin(request.user)
+    fiscal_year = BudgetFiscalYear.objects.filter(status='ACTIVE').first()
     
     if is_admin_user:
         credits = BudgetCredit.objects.annotate(
@@ -248,11 +285,11 @@ def credit_list(request):
             'pre_inc__code', 'incisos_agrupado__code'
         )
         
-        credit_by_type = (
+        raw_stats = (
             credits.filter(credit_type__isnull=False)
-            .values('credit_type__name', 'credit_type__code')
+            .values('credit_type__name', 'credit_type__code', 'pre_inc__code')
             .annotate(subtotal=Sum('total_amount'))
-            .order_by('credit_type__name')
+            .order_by('credit_type__name', 'pre_inc__code')
         )
         unassigned_total = credits.filter(credit_type__isnull=True).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     else:
@@ -265,15 +302,56 @@ def credit_list(request):
             'pre_inc__code', 'incisos_agrupado__code'
         )
         
-        credit_by_type = (
+        raw_stats = (
             credits.filter(credit_type__isnull=False)
-            .values('credit_type__name', 'credit_type__code')
+            .values('credit_type__name', 'credit_type__code', 'pre_inc__code')
             .annotate(subtotal=Sum('allocations__allocated_amount', filter=Q(allocations__unit=request.user.unit)))
-            .order_by('credit_type__name')
+            .order_by('credit_type__name', 'pre_inc__code')
         )
         unassigned_total = credits.filter(credit_type__isnull=True).aggregate(
             total=Sum('allocations__allocated_amount', filter=Q(allocations__unit=request.user.unit))
         )['total'] or 0
+
+    # Agrupar por tipo para el resumen inferior con saldos de distribución
+    credit_by_type_dict = {}
+    
+    # Obtener distribuciones totales por tipo para admins
+    dist_map = {}
+    if is_admin_user and fiscal_year:
+        dist_raw = BudgetAllocation.objects.filter(credit__fiscal_year=fiscal_year).values('credit__credit_type__code', 'credit__pre_inc__code').annotate(total=Sum('allocated_amount'))
+        dist_map = {(d['credit__credit_type__code'], d['credit__pre_inc__code']): d['total'] for d in dist_raw}
+
+    for item in raw_stats:
+        code = item['credit_type__code']
+        subpc = item['pre_inc__code']
+        if code not in credit_by_type_dict:
+            credit_by_type_dict[code] = {
+                'name': item['credit_type__name'],
+                'code': item['credit_type__code'],
+                'total_aapp': 0,
+                'total_dist': 0,
+                'subpcs': []
+            }
+        
+        amount = item['subtotal'] or 0
+        dist_amount = dist_map.get((code, subpc), amount if not is_admin_user else 0)
+        
+        credit_by_type_dict[code]['total_aapp'] += amount
+        if is_admin_user:
+            credit_by_type_dict[code]['total_dist'] += dist_amount
+        else:
+            # Para unidades, "total_dist" es su propio asignado
+            credit_by_type_dict[code]['total_dist'] += amount
+
+        if amount > 0:
+            credit_by_type_dict[code]['subpcs'].append({
+                'code': subpc or '00',
+                'amount_aapp': amount,
+                'amount_dist': dist_amount,
+                'available': amount - dist_amount if is_admin_user else 0
+            })
+    
+    credit_by_type = credit_by_type_dict.values()
 
     return render(request, 'budget/credit_list.html', {
         'credits': credits,
@@ -330,6 +408,7 @@ def credit_detail(request, pk):
         'q_segs': [q1_seg, q2_seg, q3_seg, q4_seg],
         'q_rems': q_rems,
         'is_admin': is_admin(request.user),
+        'adjustments': credit.adjustments.all().select_related('user').order_by('-timestamp'),
     }
     return render(request, 'budget/credit_detail.html', context)
 
@@ -1106,5 +1185,37 @@ def classification_detail(request, pk):
         'classification': classification,
         'stats': stats,
         'allocation_details': allocation_details
+    })
+
+
+def credit_adjust(request, pk):
+    if not is_admin(request.user): return redirect('budget:credit_list')
+    credit = get_object_or_404(BudgetCredit, pk=pk)
+    
+    if request.method == 'POST':
+        form = BudgetCreditAdjustmentForm(request.POST, credit=credit)
+        if form.is_valid():
+            try:
+                services.adjust_credit(
+                    credit_id=credit.pk,
+                    q1_new=form.cleaned_data['q1_new'],
+                    q2_new=form.cleaned_data['q2_new'],
+                    q3_new=form.cleaned_data['q3_new'],
+                    q4_new=form.cleaned_data['q4_new'],
+                    reason=form.cleaned_data['reason'],
+                    user=request.user
+                )
+                messages.success(request, f"Crédito {credit} ajustado exitosamente.")
+                return redirect('budget:credit_detail', pk=credit.pk)
+            except Exception as e:
+                error_msg = ", ".join(e.messages) if hasattr(e, 'messages') else str(e)
+                messages.error(request, f"Error: {error_msg}")
+    else:
+        form = BudgetCreditAdjustmentForm(credit=credit)
+        
+    return render(request, 'budget/form_base.html', {
+        'form': form, 
+        'title': f'Ajustar Montos: {credit}',
+        'help_text': 'Use este formulario para modificar los montos trimestrales. El sistema validará que los nuevos montos no sean inferiores a lo ya distribuido a las unidades.'
     })
 
