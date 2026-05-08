@@ -96,29 +96,54 @@ def dashboard(request):
 
         # Detalle para Tooltips (Desglose por partida)
         def get_q_tooltip(q_idx):
+            import json as _json
             field_name = f'q{q_idx}_amount'
-            alloc_field = f'q{q_idx}_a'
             q_credits = credits.annotate(
                 q_total=F(field_name),
                 q_alloc=Coalesce(Sum(f'allocations__{field_name}'), 0, output_field=models.DecimalField())
-            ).filter(models.Q(q_total__gt=0) | models.Q(q_alloc__gt=0))
-            
+            ).filter(models.Q(q_total__gt=0) | models.Q(q_alloc__gt=0)).prefetch_related('allocations__unit')
+
             table_rows = []
             for c in q_credits:
                 avail = c.q_total - c.q_alloc
                 t_str = f"{c.q_total:,.0f}".replace(",", ".")
                 a_str = f"{c.q_alloc:,.0f}".replace(",", ".")
                 v_str = f"{avail:,.0f}".replace(",", ".")
-                
+
+                # Construir lista de distribuciones para este crédito y trimestre
+                alloc_data = []
+                for alloc in c.allocations.all():
+                    q_val = getattr(alloc, field_name, 0) or 0
+                    if q_val > 0:
+                        alloc_data.append({
+                            'unit': alloc.unit.name,
+                            'amount': f"{q_val:,.0f}".replace(",", "."),
+                        })
+
+                # Serializar y escapar para atributo HTML
+                alloc_json = _json.dumps(alloc_data, ensure_ascii=False).replace("'", "&#39;").replace('"', '&quot;')
+                credit_label = str(c).replace("'", "&#39;")
+
+                if alloc_data:
+                    dist_cell = (
+                        f"<button type='button' class='btn btn-link btn-sm p-0 text-success fw-bold distrib-btn' "
+                        f"data-credit='{credit_label}' data-allocations='{alloc_json}' "
+                        f"title='Ver distribución por unidad'>"
+                        f"${a_str} <i class='fa-solid fa-users fa-xs opacity-50 ms-1'></i>"
+                        f"</button>"
+                    )
+                else:
+                    dist_cell = f"<span class='text-success fw-bold'>${a_str}</span>"
+
                 table_rows.append(
                     f"<tr>"
                     f"  <td class='small fw-bold'>{c}</td>"
                     f"  <td class='text-end small'>${t_str}</td>"
-                    f"  <td class='text-end small text-success fw-bold'>${a_str}</td>"
+                    f"  <td class='text-end small'>{dist_cell}</td>"
                     f"  <td class='text-end small text-info fw-bold'>${v_str}</td>"
                     f"</tr>"
                 )
-            
+
             if not table_rows:
                 return "<p class='text-muted text-center my-3'>No hay movimientos en este trimestre.</p>"
 

@@ -46,6 +46,15 @@
     .unit-row:hover {
         background-color: rgba(25, 135, 84, 0.02) !important;
     }
+    .distrib-btn {
+        text-decoration: none;
+        border-bottom: 1px dashed currentColor;
+        border-radius: 0;
+        cursor: zoom-in;
+    }
+    .distrib-btn:hover {
+        opacity: 0.75;
+    }
 </style>
 <div class="row g-4 mb-4">
     <!-- Columna Izquierda: AA.PP. -->
@@ -539,6 +548,45 @@
 </div>
 {% endfor %}
 
+<!-- Sub-Modal: Detalle de Distribución por Unidad -->
+<div class="modal fade" id="modalDistribDetail" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fa-solid fa-users me-2"></i>
+                    Distribución por Unidad
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted small mb-3" id="distrib-credit-label"></p>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr class="small text-uppercase text-muted">
+                                <th><i class="fa-solid fa-building me-1 opacity-50"></i> Unidad</th>
+                                <th class="text-end">Monto Distribuido</th>
+                            </tr>
+                        </thead>
+                        <tbody id="distrib-detail-tbody">
+                        </tbody>
+                        <tfoot>
+                            <tr class="fw-bold border-top">
+                                <td class="text-muted">TOTAL</td>
+                                <td class="text-end text-success" id="distrib-detail-total"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary px-4 rounded-pill" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -592,6 +640,55 @@ document.addEventListener('DOMContentLoaded', function() {
             const table = e.target.closest('.dashboard-breakdown-table');
             updateSum(table);
         }
+    });
+
+    // ─── Sub-modal: Detalle de distribución por unidad ───────────────────────
+    const distribModal = new bootstrap.Modal(document.getElementById('modalDistribDetail'));
+    const distribTbody = document.getElementById('distrib-detail-tbody');
+    const distribTotal = document.getElementById('distrib-detail-total');
+    const distribLabel = document.getElementById('distrib-credit-label');
+
+    // Escucha clicks en CUALQUIER botón .distrib-btn dentro de los modales
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.distrib-btn');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const credit = btn.dataset.credit || '';
+        // Los atributos data-* en HTML tienen los caracteres especiales como entidades;
+        // el DOM los decodifica automáticamente al acceder via .dataset.
+        let allocations = [];
+        try {
+            allocations = JSON.parse(btn.dataset.allocations);
+        } catch(err) {
+            console.error('Error al parsear distribuciones', err);
+        }
+
+        // Poblar modal
+        distribLabel.textContent = credit;
+        distribTbody.innerHTML = '';
+        let totalPesos = 0;
+
+        allocations.forEach(function(item) {
+            // Parsear monto: formato '1.234.567' (puntos como miles, sin decimales)
+            const rawAmount = parseFloat(String(item.amount).replace(/\./g, ''));
+            totalPesos += isNaN(rawAmount) ? 0 : rawAmount;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="small">
+                    <i class="fa-solid fa-building-user text-success me-2 opacity-50"></i>
+                    ${item.unit}
+                </td>
+                <td class="text-end small fw-bold text-success">$${item.amount}</td>
+            `;
+            distribTbody.appendChild(tr);
+        });
+
+        distribTotal.textContent = '$' + totalPesos.toLocaleString('es-AR');
+
+        distribModal.show();
     });
 });
 </script>
