@@ -6,6 +6,8 @@ from django.db import transaction
 from django.contrib import messages
 from .models import ClothingType, ClothingSize, ClothingBatch, Personnel, ClothingAssignment, StockThreshold
 from .forms import PersonnelForm, ClothingAssignmentForm
+import pandas as pd
+from core.models import Unit
 
 @login_required
 def home(request):
@@ -280,10 +282,107 @@ def personnel_create(request):
     return render(request, 'sigera/personnel_form.html', {'form': form})
 
 @login_required
+def personnel_import(request):
+    """
+    Vista para importar personal masivamente desde un archivo Excel.
+    """
+    if request.method == 'POST' and request.FILES.get('excel_file'):
+        excel_file = request.FILES['excel_file']
+        
+        try:
+            df = pd.read_excel(excel_file)
+            
+            # Normalizar nombres de columnas
+            df.columns = [c.strip().lower() for c in df.columns]
+            
+            # Columnas esperadas
+            required_cols = ['nombres', 'apellidos', 'matricula', 'jerarquia']
+            missing_cols = [c for c in required_cols if c not in df.columns]
+            
+            if missing_cols:
+                messages.error(request, f"Faltan las siguientes columnas en el Excel: {', '.join(missing_cols)}")
+                return redirect('sigera:personnel_import')
+
+            rank_map = {
+                'capitan de navio': 'CAPITAN_NAVIO', 'cn': 'CAPITAN_NAVIO',
+                'capitan de fragata': 'CAPITAN_FRAGATA', 'cf': 'CAPITAN_FRAGATA',
+                'capitan de corbeta': 'CAPITAN_CORBETA', 'cc': 'CAPITAN_CORBETA',
+                'teniente de navio': 'TENIENTE_NAVIO', 'tn': 'TENIENTE_NAVIO',
+                'teniente de fragata': 'TENIENTE_FRAGATA', 'tf': 'TENIENTE_FRAGATA',
+                'teniente de corbeta': 'TENIENTE_CORBETA', 'tc': 'TENIENTE_CORBETA',
+                'guardiamarina': 'GUARDIAMARINA', 'gu': 'GUARDIAMARINA',
+                'suboficial mayor': 'SUBOFICIAL_MAYOR', 'sm': 'SUBOFICIAL_MAYOR',
+                'suboficial principal': 'SUBOFICIAL_PRINCIPAL', 'sp': 'SUBOFICIAL_PRINCIPAL',
+                'suboficial primero': 'SUBOFICIAL_PRIMERO', 'si': 'SUBOFICIAL_PRIMERO',
+                'suboficial segundo': 'SUBOFICIAL_SEGUNDO', 'ss': 'SUBOFICIAL_SEGUNDO',
+                'cabo principal': 'CABO_PRINCIPAL', 'cp': 'CABO_PRINCIPAL',
+                'cabo primero': 'CABO_PRIMERO', 'ci': 'CABO_PRIMERO',
+                'cabo segundo': 'CABO_SEGUNDO', 'cs': 'CABO_SEGUNDO',
+                'marinero primero': 'MARINERO_PRIMERO', 'm1': 'MARINERO_PRIMERO',
+                'marinero segundo': 'MARINERO_SEGUNDO', 'm2': 'MARINERO_SEGUNDO',
+                'agente civil': 'AGENTE_CIVIL', 'ac': 'AGENTE_CIVIL',
+            }
+
+            created_count = 0
+            updated_count = 0
+            errors = []
+
+            with transaction.atomic():
+                for index, row in df.iterrows():
+                    try:
+                        dni = str(row['matricula']).strip().upper()
+                        if not dni or dni == 'NAN': continue
+                        
+                        first_name = str(row['nombres']).strip().upper()
+                        last_name = str(row['apellidos']).strip().upper()
+                        rank_raw = str(row['jerarquia']).strip().lower()
+                        
+                        # Buscar jerarquía
+                        rank_key = rank_map.get(rank_raw)
+                        if not rank_key:
+                            # Intento de búsqueda parcial
+                            for k, v in rank_map.items():
+                                if k in rank_raw:
+                                    rank_key = v
+                                    break
+                            if not rank_key: rank_key = 'AGENTE_CIVIL' # Default
+
+                        unit = None
+                        if 'unidad' in df.columns:
+                            unit_name = str(row['unidad']).strip()
+                            unit = Unit.objects.filter(name__icontains=unit_name).first()
+
+                        person, created = Personnel.objects.update_or_create(
+                            dni=dni,
+                            defaults={
+                                'first_name': first_name,
+                                'last_name': last_name,
+                                'rank': rank_key,
+                                'assigned_unit': unit
+                            }
+                        )
+                        
+                        if created: created_count += 1
+                        else: updated_count += 1
+                        
+                    except Exception as e:
+                        errors.append(f"Fila {index+2}: {str(e)}")
+
+            if created_count > 0 or updated_count > 0:
+                messages.success(request, f"Importación finalizada. Creados: {created_count}, Actualizados: {updated_count}")
+            if errors:
+                messages.warning(request, f"Hubo {len(errors)} errores durante la importación. Revise el formato.")
+            
+            return redirect('sigera:personnel_list')
+            
+        except Exception as e:
+            messages.error(request, f"Error al procesar el archivo: {str(e)}")
+            return redirect('sigera:personnel_import')
+
+    return render(request, 'sigera/personnel_import.html')
+
+@login_required
 def personnel_edit(request, pk):
-    """
-    Vista para editar datos de personal existente
-    """
     person = get_object_or_404(Personnel, pk=pk)
     if request.method == 'POST':
         form = PersonnelForm(request.POST, instance=person, user=request.user)
@@ -295,6 +394,24 @@ def personnel_edit(request, pk):
         form = PersonnelForm(instance=person, user=request.user)
         
     return render(request, 'sigera/personnel_form.html', {'form': form, 'edit_mode': True})
+
+@login_required
+def personnel_delete(request, pk):
+    """
+    Vista para eliminar un registro de personal
+    """
+    person = get_object_or_404(Personnel, pk=pk)
+    if request.method == 'POST':
+        name = f"{person.last_name}, {person.first_name}"
+        person.delete()
+        messages.success(request, f"¡Legajo de {name} eliminado correctamente!")
+        return redirect('sigera:personnel_list')
+    
+    return render(request, 'sigera/confirm_delete.html', {
+        'title': 'Eliminar Personal',
+        'message': f"¿Está seguro que desea eliminar a {person.last_name}, {person.first_name} ({person.dni})? Esta acción borrará permanentemente su legajo del sistema.",
+        'cancel_url': reverse('sigera:personnel_list'),
+    })
 
 @login_required
 def assignment_create(request):
