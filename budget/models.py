@@ -200,26 +200,24 @@ class BudgetCompensacion(models.Model):
     def total_amount(self):
         return self.q1_amount + self.q2_amount + self.q3_amount + self.q4_amount
 
-class BudgetExecution(models.Model):
-    TIPO_GASTO_CHOICES = [
-        ('2', 'Gastos de Comida (JEMI)'),
-        ('3', 'Mora en el Pago'),
-        ('4', 'Mantenimiento Correctivo'),
-        ('6', 'Viáticos Operativos'),
-        ('7', 'Pasajes'),
-        ('8', 'Viáticos con cargo'),
-        ('9', 'I.C.D.'),
-    ]
+class BudgetTipoGasto(models.Model):
+    code = models.CharField(max_length=10, unique=True, verbose_name="Código")
+    name = models.CharField(max_length=150, verbose_name="Nombre / Descripción")
+    class Meta:
+        verbose_name = "Tipo de Gasto"
+        verbose_name_plural = "Tipos de Gasto"
+    def __str__(self): return f"{self.code} - {self.name}"
 
+class BudgetExecution(models.Model):
     allocation = models.ForeignKey(BudgetAllocation, on_delete=models.PROTECT, related_name="executions", verbose_name="Distribución / Techo")
     reference_code = models.CharField(max_length=100, verbose_name="Nro. Expediente / Referencia")
     external_id = models.CharField(max_length=100, unique=True, null=True, blank=True, verbose_name="ID de Control Único (Opcional)", help_text="Código para evitar registros duplicados (Ej: Nro. Factura, ID de sistema externo, etc).")
     
     # Nuevos campos para Rendición
-    tipo_gasto = models.CharField(max_length=1, choices=TIPO_GASTO_CHOICES, blank=True, null=True, verbose_name="Tipo de Gasto (TG)")
+    tipo_gasto = models.ForeignKey(BudgetTipoGasto, on_delete=models.PROTECT, blank=True, null=True, verbose_name="Tipo de Gasto (TG)")
     afecta_pg117 = models.BooleanField(default=False, verbose_name="Afecta PG 117")
     numero_obra = models.CharField(max_length=5, blank=True, null=True, verbose_name="Número de Obra")
-    subcuenta = models.CharField(max_length=2, blank=True, null=True, verbose_name="Subcuenta (SC)", default='51')
+    subcuenta = models.CharField(max_length=2, blank=True, null=True, verbose_name="Subcuenta (SC)")
     
     commitment_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="Monto Comprometido")
     commitment_date = models.DateField(verbose_name="Fecha de Compromiso")
@@ -233,6 +231,16 @@ class BudgetExecution(models.Model):
         verbose_name = "Ejecución Presupuestaria"
         verbose_name_plural = "Ejecuciones Presupuestarias"
     def __str__(self): return self.reference_code
+    
+    def save(self, *args, **kwargs):
+        # Lógica automática para Subcuenta (SC)
+        if not self.subcuenta and self.allocation and self.allocation.credit:
+            ff_code = self.allocation.credit.ff.code if self.allocation.credit.ff else ""
+            if ff_code in ['13', '99']:
+                self.subcuenta = '99'
+            else:
+                self.subcuenta = '51'
+        super().save(*args, **kwargs)
 
     def get_subparcial_calculado(self):
         """Calcula los 5 dígitos del Subparcial según FF e Inciso"""
@@ -255,7 +263,7 @@ class BudgetExecution(models.Model):
             return str(self.numero_obra).zfill(5) if self.numero_obra else "00000"
         else:
             # Incisos 1, 2, 3, 5 (FF 11, 13, 99)
-            tg = self.tipo_gasto if self.tipo_gasto else "0"
+            tg = self.tipo_gasto.code if self.tipo_gasto else "0"
             afecta = "17" if self.afecta_pg117 else "00"
             return f"{nom_base}{tg}{afecta}"
 

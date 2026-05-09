@@ -5,6 +5,7 @@ app_name = 'budget'
 
 urlpatterns = [
     path('', views.dashboard, name='dashboard'),
+    path('statistics/', views.budget_statistics, name='statistics'),
     
     # Ejercicios
     path('fiscal-years/', views.fiscal_year_list, name='fiscal_year_list'),
@@ -44,6 +45,7 @@ urlpatterns = [
     path('config/<str:catalog_type>/add/', views.nomenclature_create, name='nomenclature_create'),
     path('config/<str:catalog_type>/<int:pk>/edit/', views.nomenclature_update, name='nomenclature_update'),
     path('config/<str:catalog_type>/<int:pk>/delete/', views.nomenclature_delete, name='nomenclature_delete'),
+    path('config-seed/tipo-gasto/', views.seed_tipo_gasto, name='seed_tipo_gasto'),
     
     # Clasificaciones Personalizadas
     path('classifications/', views.classification_list, name='classification_list'),

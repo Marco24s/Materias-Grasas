@@ -14,9 +14,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Rendicion fields
     const tgField = document.getElementById('id_tipo_gasto').closest('.mb-3');
-    const afectaField = document.getElementById('id_afecta_pg117').closest('.mb-3');
     const obraField = document.getElementById('id_numero_obra').closest('.mb-3');
-    const scInput = document.getElementById('id_subcuenta');
 
     function updateUI() {
         const selectedId = allocationSelect.value;
@@ -38,7 +36,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (inciso === '4') {
                 // Inciso 4: Show Obra, Hide TG/Afecta
                 tgField.style.display = 'none';
-                afectaField.style.display = 'none';
                 obraField.style.display = 'block';
                 
                 if (ff === '13' || ff === '99') {
@@ -52,16 +49,9 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 // Other Incisos: Show TG/Afecta, Hide Obra
                 tgField.style.display = 'block';
-                afectaField.style.display = 'block';
                 obraField.style.display = 'none';
             }
 
-            // Subcuenta default
-            if (ff === '13' || ff === '99') {
-                scInput.value = '99';
-            } else {
-                scInput.value = '51';
-            }
         }
     }
 

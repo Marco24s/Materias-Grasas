@@ -4,7 +4,12 @@
 <div class="row animate__animated animate__fadeIn">
     <div class="col-12 mb-4">
         <h2 class="fw-bold">Configuración de Nomencladores</h2>
-        <p class="text-muted">Gestione los catálogos y códigos base utilizados en el sistema presupuestario.</p>
+        <div class="d-flex justify-content-between align-items-center">
+            <p class="text-muted mb-0">Gestione los catálogos y códigos base utilizados en el sistema presupuestario.</p>
+            <a href="{% url 'budget:seed_tipo_gasto' %}" class="btn btn-sm btn-success rounded-pill px-3">
+                <i class="fa-solid fa-cloud-arrow-down me-2"></i> Cargar Tipos de Gasto Predeterminados
+            </a>
+        </div>
     </div>
 
     {% for cat in catalogs %}

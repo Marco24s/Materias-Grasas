@@ -5,7 +5,7 @@ from .models import (
     BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetProg,
     BudgetPPPInc, BudgetPPInc, BudgetPreInc, BudgetIncisosAgrupado,
     BudgetInc, BudgetCredit, BudgetClassification, BudgetCreditType,
-    BudgetAllocation, BudgetExecution, BudgetCompensacion
+    BudgetAllocation, BudgetExecution, BudgetCompensacion, BudgetTipoGasto
 )
 
 class BudgetFiscalYearForm(forms.ModelForm):
@@ -53,6 +53,12 @@ class BudgetIncisosAgrupadoForm(forms.ModelForm):
 class BudgetIncForm(forms.ModelForm):
     class Meta:
         model = BudgetInc
+        fields = ['code', 'name']
+
+
+class BudgetTipoGastoForm(forms.ModelForm):
+    class Meta:
+        model = BudgetTipoGasto
         fields = ['code', 'name']
 
 
@@ -138,7 +144,8 @@ class AllocationChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
         available = obj.available_amount
         av_str = f"{available:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        return f"{obj.unit.name} - [Disp: ${av_str}]"
+        subpc = obj.credit.pre_inc.code if obj.credit.pre_inc else "00"
+        return f"{obj.unit.name} - {subpc} - [Disp: ${av_str}]"
 
 class BudgetExecutionCommitmentForm(forms.ModelForm):
     allocation = AllocationChoiceField(
@@ -155,7 +162,7 @@ class BudgetExecutionCommitmentForm(forms.ModelForm):
         model = BudgetExecution
         fields = [
             'allocation', 'use_total_amount', 'reference_code', 'external_id', 
-            'tipo_gasto', 'afecta_pg117', 'numero_obra', 'subcuenta',
+            'tipo_gasto', 'numero_obra',
             'commitment_amount', 'commitment_date'
         ]
         labels = {
@@ -165,9 +172,7 @@ class BudgetExecutionCommitmentForm(forms.ModelForm):
             'commitment_amount': 'Monto a Comprometer',
             'commitment_date': 'Fecha del Compromiso',
             'tipo_gasto': 'Tipo de Gasto (TG)',
-            'afecta_pg117': 'Afecta PG 117',
             'numero_obra': 'Número de Obra',
-            'subcuenta': 'Subcuenta (SC)',
         }
         help_texts = {
             'allocation': 'Seleccione la distribución de crédito contra la cual se imputará el gasto.',
@@ -176,7 +181,6 @@ class BudgetExecutionCommitmentForm(forms.ModelForm):
             'external_id': 'Código único para prevenir registros duplicados.',
             'tipo_gasto': 'Requerido para Incisos 1, 2, 3 y 5.',
             'numero_obra': 'Requerido para Inciso 4 (5 dígitos).',
-            'subcuenta': 'Se autocompleta con 51 o 99 según FF, pero es editable.',
         }
         widgets = {
             'commitment_date': forms.DateInput(attrs={'type': 'date'}),

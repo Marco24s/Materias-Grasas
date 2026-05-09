@@ -38,32 +38,9 @@
                                     <i class="fa-solid fa-pen"></i>
                                 </a>
                                 <button type="button" class="btn btn-sm btn-outline-danger rounded-circle" 
-                                        data-bs-toggle="modal" data-bs-target="#deleteModal{{ item.pk }}" title="Eliminar">
+                                        data-bs-toggle="modal" data-bs-target="#deleteModal{{ item.pk }}">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
-                                
-                                <!-- Delete Modal -->
-                                <div class="modal fade" id="deleteModal{{ item.pk }}" tabindex="-1" aria-hidden="true">
-                                    <div class="modal-dialog modal-dialog-centered">
-                                        <div class="modal-content">
-                                            <div class="modal-header border-0">
-                                                <h5 class="modal-title fw-bold">Confirmar Eliminación</h5>
-                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                            </div>
-                                            <div class="modal-body text-start">
-                                                ¿Está seguro que desea eliminar a <strong>{{ item }}</strong>? 
-                                                <br><small class="text-danger">Esta acción no se puede deshacer si existen créditos asociados.</small>
-                                            </div>
-                                            <div class="modal-footer border-0">
-                                                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
-                                                <form action="{% url 'budget:nomenclature_delete' config.id item.pk %}" method="post" class="d-inline">
-                                                    {% csrf_token %}
-                                                    <button type="submit" class="btn btn-danger rounded-pill px-4">Eliminar</button>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
                             </td>
                         </tr>
                         {% empty %}
@@ -80,4 +57,29 @@
         </div>
     </div>
 </div>
+
+{% for item in items %}
+<!-- Delete Modal for {{ item }} -->
+<div class="modal fade" id="deleteModal{{ item.pk }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header border-0">
+                <h5 class="modal-title fw-bold">Confirmar Eliminación</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-start">
+                ¿Está seguro que desea eliminar a <strong>{{ item }}</strong>? 
+                <br><small class="text-danger">Esta acción no se puede deshacer si existen créditos o gastos asociados.</small>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
+                <form action="{% url 'budget:nomenclature_delete' config.id item.pk %}" method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger rounded-pill px-4">Eliminar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
 {% endblock %}

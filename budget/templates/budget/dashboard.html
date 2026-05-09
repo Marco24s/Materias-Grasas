@@ -94,7 +94,7 @@
                                     <div class="d-flex justify-content-between align-items-center py-1">
                                         <span class="text-muted small">
                                             <i class="fa-solid fa-caret-right me-1 opacity-50" style="font-size: 0.7rem;"></i> 
-                                            SUBPC <strong>{{ sub.code }}</strong>
+                                            <strong>{{ sub.code }}</strong>
                                         </span>
                                         <span class="text-muted small fw-bold">${{ sub.amount|localize }}</span>
                                     </div>
@@ -141,7 +141,7 @@
                     {% if stats.allocated_by_subpc %}
                     <div class="mt-3 pt-2 border-top">
                         <div class="d-flex justify-content-between align-items-center mb-2" style="cursor: pointer;" data-bs-toggle="collapse" data-bs-target="#distrib-subpc-collapse">
-                            <span class="small fw-bold text-success text-uppercase" style="letter-spacing: 0.5px;">Desglose por SUBPC</span>
+                            <span class="small fw-bold text-success text-uppercase" style="letter-spacing: 0.5px;">Desglose</span>
                             <i class="fa-solid fa-chevron-down small text-success transition-icon"></i>
                         </div>
                         <div class="collapse" id="distrib-subpc-collapse">
@@ -149,7 +149,7 @@
                             <div class="d-flex justify-content-between align-items-center mb-1">
                                 <span class="small text-muted">
                                     <i class="fa-solid fa-caret-right me-1 opacity-50"></i>
-                                    SUBPC {{ row.credit__pre_inc__code }}
+                                    {{ row.credit__pre_inc__code }}
                                 </span>
                                 <span class="small fw-bold">${{ row.subtotal|localize }}</span>
                             </div>
@@ -223,6 +223,9 @@
                 </a>
                 <a href="{% url 'budget:compensacion_list' %}" class="btn btn-outline-primary btn-sm text-start py-2 mt-2 border-2 border-primary fw-bold">
                     <i class="fa-solid fa-shuffle me-2"></i> Compensación de Partidas
+                </a>
+                <a href="{% url 'budget:statistics' %}" class="btn btn-primary btn-sm text-start py-2 mt-2 shadow-sm border-0" style="background: linear-gradient(45deg, #198754, #0b422a);">
+                    <i class="fa-solid fa-chart-pie me-2"></i> Ver Estadísticas y Gráficos
                 </a>
             </div>
         </div>

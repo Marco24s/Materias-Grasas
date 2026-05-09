@@ -9,7 +9,7 @@ from .models import (
     BudgetFiscalYear, BudgetFF, BudgetSubprog, BudgetProg,
     BudgetPPPInc, BudgetPPInc, BudgetPreInc, BudgetIncisosAgrupado,
     BudgetInc, BudgetCredit, BudgetAllocation, BudgetExecution,
-    BudgetClassification, BudgetCreditType, BudgetCreditTypeLog, BudgetCompensacion, InsufficientFundsError
+    BudgetClassification, BudgetCreditType, BudgetCreditTypeLog, BudgetCompensacion, BudgetTipoGasto, InsufficientFundsError
 )
 import csv
 from django.http import HttpResponse
@@ -20,7 +20,7 @@ from .forms import (
     BudgetCompensacionForm, BudgetFFForm, BudgetSubprogForm, BudgetProgForm,
     BudgetPPPIncForm, BudgetPPIncForm, BudgetPreIncForm,
     BudgetIncisosAgrupadoForm, BudgetIncForm, BudgetCreditTypeForm,
-    BudgetCreditAdjustmentForm
+    BudgetCreditAdjustmentForm, BudgetTipoGastoForm
 )
 from . import services
 
@@ -67,11 +67,14 @@ def dashboard(request):
         # Cálculo de anchos para la barra de progreso trimestral (basado en compromisos REALES por fecha)
         q1_t, q2_t, q3_t, q4_t = stats['q1_total'], stats['q2_total'], stats['q3_total'], stats['q4_total']
         
-        # Agrupación de compromisos por trimestre real
-        q1_c = executions.filter(commitment_date__month__in=[1,2,3]).aggregate(Sum('commitment_amount'))['commitment_amount__sum'] or 0
-        q2_c = executions.filter(commitment_date__month__in=[4,5,6]).aggregate(Sum('commitment_amount'))['commitment_amount__sum'] or 0
-        q3_c = executions.filter(commitment_date__month__in=[7,8,9]).aggregate(Sum('commitment_amount'))['commitment_amount__sum'] or 0
-        q4_c = executions.filter(commitment_date__month__in=[10,11,12]).aggregate(Sum('commitment_amount'))['commitment_amount__sum'] or 0
+        # Agrupación de compromisos por trimestre de ASIGNACIÓN (FIFO)
+        q1_c = q2_c = q3_c = q4_c = 0
+        for alloc in allocations:
+            rem = alloc.spent_amount
+            p1 = min(rem, alloc.q1_amount); q1_c += p1; rem -= p1
+            p2 = min(rem, alloc.q2_amount); q2_c += p2; rem -= p2
+            p3 = min(rem, alloc.q3_amount); q3_c += p3; rem -= p3
+            p4 = min(rem, alloc.q4_amount); q4_c += p4; rem -= p4
 
         stats['q1_fill'] = (q1_c / q1_t * 100) if q1_t > 0 else 0
         stats['q2_fill'] = (q2_c / q2_t * 100) if q2_t > 0 else 0
@@ -228,6 +231,70 @@ def dashboard(request):
             )
 
     return render(request, 'budget/dashboard.html', {'fiscal_year': fiscal_year, 'stats': stats, 'unit_report': unit_report, 'is_admin': is_admin_user})
+
+def budget_statistics(request):
+    fiscal_year = BudgetFiscalYear.objects.filter(status='OPEN').first()
+    if not fiscal_year:
+        return redirect('budget:dashboard')
+
+    is_admin_user = is_admin(request.user)
+    
+    # 1. Crédito por Tipo
+    if is_admin_user:
+        credit_by_type = BudgetCredit.objects.filter(fiscal_year=fiscal_year, credit_type__isnull=False).values('credit_type__name').annotate(total=Sum('total_amount'))
+    else:
+        credit_by_type = BudgetCredit.objects.filter(fiscal_year=fiscal_year, credit_type__isnull=False, allocations__unit=request.user.unit).values('credit_type__name').annotate(total=Sum('allocations__allocated_amount'))
+        
+    # 2. Crédito por SUBPC
+    if is_admin_user:
+        credit_by_subpc = BudgetCredit.objects.filter(fiscal_year=fiscal_year).values('pre_inc__code').annotate(total=Sum('total_amount')).order_by('pre_inc__code')
+    else:
+        credit_by_subpc = BudgetCredit.objects.filter(fiscal_year=fiscal_year, allocations__unit=request.user.unit).values('pre_inc__code').annotate(total=Sum('allocations__allocated_amount')).order_by('pre_inc__code')
+
+    # 3. Estado de Ejecución (Etapas)
+    if is_admin_user:
+        exec_stats = BudgetExecution.objects.filter(allocation__credit__fiscal_year=fiscal_year).aggregate(
+            commitment=Sum('commitment_amount'),
+            accrued=Sum('accrued_amount'),
+            paid=Sum('paid_amount')
+        )
+        total_credit = BudgetCredit.objects.filter(fiscal_year=fiscal_year).aggregate(total=Sum('total_amount'))['total'] or 0
+    else:
+        exec_stats = BudgetExecution.objects.filter(allocation__unit=request.user.unit, allocation__credit__fiscal_year=fiscal_year).aggregate(
+            commitment=Sum('commitment_amount'),
+            accrued=Sum('accrued_amount'),
+            paid=Sum('paid_amount')
+        )
+        total_credit = BudgetAllocation.objects.filter(unit=request.user.unit, credit__fiscal_year=fiscal_year).aggregate(total=Sum('allocated_amount'))['total'] or 0
+
+    commitment = exec_stats['commitment'] or 0
+    accrued = exec_stats['accrued'] or 0
+    paid = exec_stats['paid'] or 0
+    balance = total_credit - commitment
+
+    execution_stages = [
+        {'name': 'Por Ejecutar (Saldo)', 'value': float(balance)},
+        {'name': 'Comprometido (Sin Devengar)', 'value': float(commitment - accrued)},
+        {'name': 'Devengado (Sin Pagar)', 'value': float(accrued - paid)},
+        {'name': 'Pagado', 'value': float(paid)},
+    ]
+
+    # 4. Distribución por Unidad (Solo para Admins)
+    unit_distribution = []
+    if is_admin_user:
+        unit_distribution = BudgetAllocation.objects.filter(credit__fiscal_year=fiscal_year).values('unit__name').annotate(total=Sum('allocated_amount')).order_by('-total')
+
+    context = {
+        'fiscal_year': fiscal_year,
+        'credit_by_type_json': list(credit_by_type),
+        'credit_by_subpc_json': list(credit_by_subpc),
+        'execution_stages_json': execution_stages,
+        'unit_distribution_json': list(unit_distribution),
+        'total_credit': total_credit,
+        'is_admin': is_admin_user
+    }
+    
+    return render(request, 'budget/statistics.html', context)
 
 def fiscal_year_list(request):
     if not is_admin(request.user): return redirect('budget:dashboard')
@@ -848,7 +915,12 @@ def execution_step_accrual(request, pk):
                 error_msg = ", ".join(e.messages) if hasattr(e, 'messages') else str(e)
                 messages.error(request, f"Error: {error_msg}")
     else: form = BudgetExecutionAccrualForm(instance=execution)
-    return render(request, 'budget/form_base.html', {'form': form, 'title': f'Paso 2: Devengado ({execution.reference_code})'})
+    return render(request, 'budget/form_base.html', {
+        'form': form, 
+        'title': f'Paso 2: Devengado ({execution.reference_code})',
+        'reference_amount': execution.commitment_amount,
+        'reference_label': 'Monto Comprometido'
+    })
 
 def execution_step_payment(request, pk):
     execution = get_object_or_404(BudgetExecution, pk=pk)
@@ -862,7 +934,12 @@ def execution_step_payment(request, pk):
                 error_msg = ", ".join(e.messages) if hasattr(e, 'messages') else str(e)
                 messages.error(request, f"Error: {error_msg}")
     else: form = BudgetExecutionPaymentForm(instance=execution)
-    return render(request, 'budget/form_base.html', {'form': form, 'title': f'Paso 3: Pago ({execution.reference_code})'})
+    return render(request, 'budget/form_base.html', {
+        'form': form, 
+        'title': f'Paso 3: Pago ({execution.reference_code})',
+        'reference_amount': execution.accrued_amount,
+        'reference_label': 'Monto Devengado'
+    })
 
 def execution_release_surplus(request, pk):
     """
@@ -973,6 +1050,7 @@ def nomenclature_dashboard(request):
         {'id': 'preinc', 'name': 'SUBPCs', 'model': BudgetPreInc, 'icon': 'fa-list-ol'},
         {'id': 'inc_agrup', 'name': 'MONEDAs', 'model': BudgetIncisosAgrupado, 'icon': 'fa-boxes-stacked'},
         {'id': 'credit_type', 'name': 'Tipos de Crédito', 'model': BudgetCreditType, 'icon': 'fa-tags'},
+        {'id': 'tipo_gasto', 'name': 'Tipos de Gasto (TG)', 'model': BudgetTipoGasto, 'icon': 'fa-receipt'},
     ]
     
     # Add counts to each catalog
@@ -1050,8 +1128,10 @@ def nomenclature_delete(request, catalog_type, pk):
         try:
             instance.delete()
             messages.success(request, f"{config['model']._meta.verbose_name} eliminado exitosamente.")
+        except ProtectedError:
+            messages.error(request, f"No se puede eliminar '{instance}' porque ya está siendo utilizado en el sistema.")
         except Exception as e:
-            messages.error(request, f"No se pudo eliminar: {e}")
+            messages.error(request, f"Error al eliminar: {e}")
         return redirect('budget:nomenclature_list', catalog_type=catalog_type)
         
     return render(request, 'budget/confirm_delete.html', {
@@ -1071,8 +1151,35 @@ def _get_catalog_config(catalog_type):
         'inc_agrup': {'id': 'inc_agrup', 'model': BudgetIncisosAgrupado, 'form_class': BudgetIncisosAgrupadoForm, 'name': 'MONEDAs'},
         'inc': {'id': 'inc', 'model': BudgetInc, 'form_class': BudgetIncForm, 'name': 'INCISOs'},
         'credit_type': {'id': 'credit_type', 'model': BudgetCreditType, 'form_class': BudgetCreditTypeForm, 'name': 'Tipos de Crédito'},
+        'tipo_gasto': {'id': 'tipo_gasto', 'model': BudgetTipoGasto, 'form_class': BudgetTipoGastoForm, 'name': 'Tipos de Gasto'},
     }
     return configs.get(catalog_type)
+
+def seed_tipo_gasto(request):
+    if not is_admin(request.user): return redirect('budget:dashboard')
+    
+    defaults = [
+        ('2', 'Gastos de Comida (JEMI)'),
+        ('3', 'Mora en el Pago'),
+        ('4', 'Mantenimiento Correctivo'),
+        ('6', 'Viáticos Operativos'),
+        ('7', 'Pasajes'),
+        ('8', 'Viáticos con cargo'),
+        ('9', 'I.C.D.'),
+    ]
+    
+    created_count = 0
+    for code, name in defaults:
+        obj, created = BudgetTipoGasto.objects.get_or_create(code=code, defaults={'name': name})
+        if created:
+            created_count += 1
+            
+    if created_count > 0:
+        messages.success(request, f"Se han cargado {created_count} tipos de gasto predeterminados.")
+    else:
+        messages.info(request, "Los tipos de gasto predeterminados ya existen.")
+        
+    return redirect('budget:nomenclature_list', catalog_type='tipo_gasto')
 
 # --- Clasificaciones Personalizadas ---
 

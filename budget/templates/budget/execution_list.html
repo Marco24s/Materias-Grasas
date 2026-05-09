@@ -37,7 +37,11 @@
                         <small class="text-muted">{{ exec.commitment_date|date:"d/m/Y" }}</small>
                     </td>
                     <td>{{ exec.allocation.unit.name }}</td>
-                    <td><span class="badge bg-secondary opacity-75">{{ exec.allocation.credit }}</span></td>
+                    <td style="max-width: 180px;">
+                        <span class="badge bg-secondary opacity-75 d-inline-block text-truncate w-100" title="{{ exec.allocation.credit }}">
+                            {{ exec.allocation.credit }}
+                        </span>
+                    </td>
                     <td class="fw-bold">${{ exec.commitment_amount|localize }}</td>
                     <td class="text-info">${{ exec.accrued_amount|localize }}</td>
                     <td class="text-success">${{ exec.paid_amount|localize }}</td>
